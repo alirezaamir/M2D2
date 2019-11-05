@@ -1,3 +1,4 @@
+#include <omp.h>
 #include <vector>
 #include <math.h>
 #include <iostream>
@@ -5,20 +6,22 @@
 #include <fstream>
 #include <string>
 #include <python2.7/Python.h>
+#include <boost/log/trivial.hpp>
 
 #include "itensor/all.h"
 
-#define TOL 0.001
-#define MAX_SWEEPS 10
+#define TOL 0.00001
+#define MAX_SWEEPS 1000
 #define __DEBUG__ false
-#define STEP_SIZE 0.001
+#define STEP_SIZE 0.1
+#define MAX_INNER_ITER 5000
 #define PI2 1.5707963267948966
-#define TENSOR_ONES(inds) ITensor(inds).fill(1.0)
+#define BOND_DIM 4
 
 using namespace std;
 using namespace itensor;
 
-struct Ind {int i; int j; Ind(int i, int j) : i(i), j(j) {};};
+struct Ind {unsigned i,j; Ind(unsigned i, unsigned j) : i(i), j(j) {};};
 
 struct UpDownSequence {
     int low, high, direction, ptr, sweeps;
@@ -39,22 +42,8 @@ struct UpDownSequence {
     }
 };
 
-Real compute_cost(PyObject *labels,
-                  vector<ITensor> mps_tensors, 
-                  vector<vector<ITensor>> data_tensors) {
-    Real cost = 0;
-    int ix = 0;
-    for (auto row : data_tensors) {
-        Real lbl = (Real) PyInt_AsLong(PyList_GetItem(labels, ++ix));
-        auto fx = row.at(0)*mps_tensors.at(0);
-        for (int jj=1; jj<row.size(); jj++) {
-            fx *= row.at(jj)*mps_tensors.at(jj);
-        }
-        cost += pow(lbl - fx.elt(), 2);
-    }
-    cost /= (double) data_tensors.size();
-    return cost;
-}
+string gen_label(uint i) { return "a" + to_string(i) + "->" + to_string(i+1); }
+
 
 static PyObject *tnml(PyObject *self, PyObject *args) {
     PyObject *data, *labels;
@@ -63,134 +52,145 @@ static PyObject *tnml(PyObject *self, PyObject *args) {
         return NULL;
     }
 
-    int d = 2;
-    int bond_dim_init = 4;
-    auto N = PyList_Size(data);
-    auto K = PyList_Size(PyList_GetItem(data, 0));
+    // check that types are correct 
+    if (!PyFloat_Check(PyList_GetItem(PyList_GetItem(data, 0), 0)))
+        PyErr_SetString(PyExc_TypeError, "Data must be floats!");
+    if (!PyFloat_Check(PyList_GetItem(labels, 0)))
+        PyErr_SetString(PyExc_TypeError, "Labels must be floats");
 
-    // step 1: Create the MPS representing the weights
-    int num_sites = K-1;
+    uint N = PyList_Size(data);
+    uint K = PyList_Size(PyList_GetItem(data, 0));
+
+    vector<Index> site_indexes;
     vector<ITensor> mps_tensors;
-    vector<Index> site_idxs;
-    
-    // fill the tensors in the MPS
-    Index idx_left = Index(bond_dim_init, "idx0->1");
-    Index idx_site = Index(d, "idx_s0");
-    mps_tensors.emplace_back(randomITensor(idx_site, idx_left));
-    site_idxs.emplace_back(idx_site);
-
-    for (int ix=1; ix<num_sites; ix++) {
-        Index idx_right = Index(bond_dim_init, 
-            "idx" + to_string(ix) + "->" + to_string(ix+1));
-        idx_site = Index(d, "idx_s" + to_string(ix));
-        site_idxs.emplace_back(idx_site);
-        mps_tensors.emplace_back(randomITensor(idx_site, idx_left, idx_right));
+    Index idx_left = Index(BOND_DIM, "a0->1");
+    Index site = Index(2, "s0");
+    mps_tensors.push_back(randomITensor(idx_left, site));
+    site_indexes.push_back(site);
+    for (uint six=1; six<K-1; six++) {
+        site = Index(2, "s" + to_string(six));
+        site_indexes.push_back(site);
+        Index idx_right = Index(BOND_DIM, gen_label(six));
+        mps_tensors.push_back(randomITensor(site, idx_left, idx_right));
         idx_left = idx_right;
     }
 
-    idx_site = Index(d, "idx_s" + to_string(num_sites));
-    site_idxs.emplace_back(idx_site);
-    mps_tensors.emplace_back(randomITensor(idx_left, idx_site));
+    site = Index(2, "s" + to_string(K-1));
+    mps_tensors.push_back(randomITensor(idx_left, site));
+    site_indexes.push_back(site);
 
-    if (__DEBUG__) {
-        int ix = 0;
-        for (auto T : mps_tensors) {
-            printfln("Site: %d", ix++);
-            Print(T);
-        }
+    BOOST_LOG_TRIVIAL(info) << "Data points: " << N;
+    BOOST_LOG_TRIVIAL(info) << "Input dimension: " << K;
+    BOOST_LOG_TRIVIAL(info) << "MPS Sites: " << mps_tensors.size();
+
+    if (site_indexes.size() != mps_tensors.size()) {
+        PyErr_SetString(
+            PyExc_Exception, "Number of site indexes not equal to mps states");
+        return NULL;
     }
 
-    // step 2: Create the tensors representing the data
+    BOOST_LOG_TRIVIAL(info) << "Copying data..."; 
     vector<vector<ITensor>> data_tensors;
+    for (uint ix=0; ix<N; ix++) {
+        auto row = vector<ITensor>(); 
+        auto img = PyList_GetItem(data, ix);
 
-    // step 3: Copy the Python data to the Tensor (TODO: Optimize this)
-    for (int ii=0; ii<N; ii++) {
-        data_tensors.emplace_back(vector<ITensor>());
-        PyObject *img = PyList_GetItem(data, ii);
-        for (int jj=0; jj<=num_sites; jj++) {
-            Index idx_site = site_idxs.at(jj);
-            ITensor T = ITensor(idx_site);
-            double val = (double) PyInt_AsLong(PyList_GetItem(img, jj));
-            val /= 255.;
-            T.set(idx_site=1, cos(PI2*val));
-            T.set(idx_site=2, sin(PI2*val));
-            data_tensors.back().emplace_back(T);
+        for (uint ixj=0; ixj<K; ixj++) {
+            auto s = site_indexes.at(ixj);
+            auto D = ITensor(s);
+
+            Real val = PyFloat_AsDouble(PyList_GetItem(img, ixj));
+            D.set(s=1, cos(PI2*val));
+            D.set(s=2, sin(PI2*val));
+            row.push_back(D);
         }
+        data_tensors.push_back(row);
     }
 
-    // step 3: Run the optimization algorithm
-    bool converged = false;
-    Real site_cost = 0.0;
-    Real site_cost_prev = INFINITY;
-    UpDownSequence seq = UpDownSequence(0, num_sites);
-    while ((site_cost - site_cost_prev) > TOL || seq.sweeps < MAX_SWEEPS) {
+    // also copy the label over to native C++ for performance
+    vector<Real> label_array;
+    for (uint ix=0; ix<N; ix++)
+        label_array.push_back(PyFloat_AsDouble(PyList_GetItem(labels, ix)));
+
+    // run the optimization algorithm
+    Real site_cost = 0.;
+    Real site_cost_new = -9999;
+
+    Real *fitted_values = new Real[N];
+    ITensor *grads_array = new ITensor[N];
+
+    auto tc = omp_get_num_threads();
+    UpDownSequence seq = UpDownSequence(0, K-1);
+    BOOST_LOG_TRIVIAL(info) << "Beginning optimization...";
+    BOOST_LOG_TRIVIAL(info) << "OpenMP using: " << tc << " threads";
+
+    while (abs(site_cost - site_cost_new) > TOL && seq.sweeps < MAX_SWEEPS) {
         auto idx = seq.next();
-        site_cost_prev = site_cost;
-        printfln("Optimizing site: %d->%d => %f", idx.i, idx.j, site_cost_prev);
+        site_cost = site_cost_new;
+        BOOST_LOG_TRIVIAL(info) << "Optimizing sites: " << idx.i << " -> " << idx.j;
 
-        ITensor site = mps_tensors.at(idx.i);
-        ITensor next_site = mps_tensors.at(idx.j);
-        auto B = site*next_site;
+        // form the initial bond tensor
+        auto T1 = mps_tensors.at(idx.i);
+        auto T2 = mps_tensors.at(idx.j);
+        auto B = T1*T2;
 
-        Real inner_cost_prev = INFINITY;
-        Real inner_cost = 0;
-        unsigned int iter = 0;
-        while (abs(inner_cost - inner_cost_prev) > TOL) {
-            //printfln("Iteration (begin): %d => %f", ++iter, cost);
-            inner_cost_prev = inner_cost;
-            inner_cost = 0;
-            B.scaleTo(1.);
-            
-            // accumulate gradients
-            ITensor grads = ITensor(inds(B));
-            int ix = 0;
-            for (auto v : data_tensors) {
-                auto phi = v.at(idx.i)*v.at(idx.j);
+        uint iter = 0; 
+        Real cost = 0, cost_new = -9999;
+        while (abs(cost - cost_new) > TOL && iter < MAX_INNER_ITER) {
+            cost = cost_new;
+            cost_new = 0;
 
-                // contract over the wings to obtain the reduced data set
-                for (int jj=0; jj<min(idx.i, idx.j); jj++) {
-                    auto lw = mps_tensors.at(jj)*v.at(jj);
-                    phi *= lw;
-                }
-                
-                for (int jj=num_sites; jj>max(idx.j, idx.i); jj--) {
-                    auto rw = mps_tensors.at(jj)*v.at(jj);
-                    phi *= rw;
-                }
+            #pragma omp parallel for
+            for (uint ix=0; ix<N; ix++) {
+                auto row = data_tensors.at(ix);
+                auto phi = row.at(idx.i)*row.at(idx.j);
+                for (uint jj=0; jj<min(idx.i, idx.j); jj++)
+                    phi *= mps_tensors.at(jj)*row.at(jj);
+                for (uint jj=K-1; jj>max(idx.i, idx.j); jj--)
+                    phi *= mps_tensors.at(jj)*row.at(jj);
 
-                auto fx = B*phi;
-                if (fx.order() > 0) {
-                    Print(fx);
-                    PyErr_SetString(PyExc_Exception, "Invalid condition on fx");
-                    return NULL;
-                }
+                auto fx = phi*B;
+                Real pred = fx.elt();
+                Real actual = label_array.at(ix);
+                Real eps = actual - pred;
 
-                Real lbl_pred = fx.elt();
-                Real lbl = (double) PyInt_AsLong(PyList_GetItem(labels, ++ix));
-                Real eps = lbl - lbl_pred;
-
-                inner_cost += pow(eps, 2);
-                grads += eps*phi;
-
-                if (__DEBUG__ && ix > 4) break;
+                fitted_values[ix] = pred;
+                grads_array[ix] = eps*phi;
             }
-            inner_cost /= (double) data_tensors.size();
+            
+            auto grads = ITensor(inds(B));
+            for (uint ix=0; ix<N; ix++) {
+                grads += grads_array[ix];
+                cost_new += pow(fitted_values[ix] - label_array[ix], 2);
+            }
+            cost_new /= static_cast<double>(N);
 
-            if (__DEBUG__) Print(grads);
-            B += (STEP_SIZE*grads);
+            B += (1./((double) N))*STEP_SIZE*grads;
+            ++iter;
         }
-        // printfln("Converged! Final cost: %f", inner_cost);
+        BOOST_LOG_TRIVIAL(info) << "Inner loop converged in " <<
+            iter << " iterations: " << cost_new;
+ 
+        // decompose the updated bond tensor back into the two site tensors
+        auto [U,S,V] = svd(B, inds(T1));
+        T1 = U;
+        T2 = S*V;
+        mps_tensors.at(idx.i) = T1;
+        mps_tensors.at(idx.j) = T2;
 
-        // split the bond tensor back into the two site tensors
-
-        auto [U,S,V] = svd(B, inds(mps_tensors.at(idx.i)));
-        mps_tensors.at(idx.i) = U;
-        mps_tensors.at(idx.j) = S*V;
-
-        site_cost = compute_cost(labels, mps_tensors, data_tensors);
+        site_cost_new = cost_new;
+        BOOST_LOG_TRIVIAL(info) << "Converged! Cost: " << site_cost_new;
     }
 
-    return PyLong_FromLong(0L);
+    BOOST_LOG_TRIVIAL(info) << "Converged! Final cost: " << site_cost_new;
+    PyObject *predictions = PyList_New(N);
+    for (uint ix=0; ix<N; ix++)
+        PyList_SetItem(predictions, ix, PyFloat_FromDouble(fitted_values[ix]));
+
+    delete[] fitted_values;
+    delete[] grads_array;
+
+    return predictions;
 }
 
 static PyMethodDef tnml_methods[] = {
