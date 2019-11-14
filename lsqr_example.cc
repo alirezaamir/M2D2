@@ -22,6 +22,12 @@ int main() {
     std::cout << "True weights " << std::endl;
     PrintData(w);
 
+    Index ixi = Index(2, "ixi");
+    Index ixj = Index(2, "ixj");
+    auto p = ITensor(ixi); p.set(1, 1); p.set(2, 2);
+    auto q = ITensor(ixj); q.set(1, 10); q.set(2, 9);
+    PrintData(p*q);
+
     // some variable defs
     ITensor predicted, eps, grad;
     double alpha = 0.01;

@@ -3,6 +3,8 @@ import tnml
 import numpy as np
 import matplotlib.pyplot as plt
 
+np.random.seed(13298)
+
 # (x_train, y_train), (x_test, y_test) = datasets.mnist.load_data()
 # imgs = x_test.reshape(-1, 784)[:100,].tolist()
 # lbls = (y_test == 1).astype("int")[:100].tolist()
@@ -17,6 +19,9 @@ A = np.concatenate((
     np.cos((np.pi/2.)*x2), np.sin((np.pi/2.)*x2),
     np.cos((np.pi/2.)*x3), np.sin((np.pi/2.)*x3),
     np.cos((np.pi/2.)*x4), np.sin((np.pi/2.)*x4)), axis=1)
+
+print A[:3,:]
+
 w = np.random.rand(8,1)
 lbls = A.dot(w).ravel().tolist()
 
