@@ -1,12 +1,13 @@
+using ITensors
 using Statistics
 using MLDatasets
 using ScikitLearn
 using LinearAlgebra
 
-@sk_import linear_model: LogisticRegression
+@sk_import linear_model: LogisticRegression;
 
-EPS = 1e-3;
-MIN_DIM = 1;
+const EPS = 1e-3;
+const MIN_DIM = 1;
 
 function main()
     @info "Loading training data..."
@@ -14,9 +15,21 @@ function main()
     X = convert(Array{Float64}, MNIST.convert2features(x_train)');
     N,K = size( X );
 
-    tensors = Array{Array{Float64,2}}[];
-    features = Array{Array{Float64,2}}[];
-    Φ = [[ones(N,1) X[:,ix]] for ix in 1:K];
+    Φ_dim = 2;
+    Φ = ITensor[];
+    ix_obs = Index(N, "obs");
+    for k in 1:K
+        global Φ, Φ_dim, ix_obs;
+        ix_site = Index(Φ_dim, "site");
+        T = fill!(ITensor(ix_obs, ix_site), 1.0);
+        for n in 1:N
+            T[ix_obs(n), ix_site(2)] = X[n,k];
+        end
+        push!(Φ, T);
+    end
+
+    tensors = Array{ITensor,1}[];
+    features = Array{ITensor,1}[];
 
     layer = 1;
     while length(Φ) > 1
@@ -54,50 +67,71 @@ end
 
 function coarse_grain_layer( Φ )
     num_sites_new = Int(ceil(length(Φ) / 2.));
-    tensors = Array{Float64,2}[];
-    features = Array{Float64,2}[];
 
     N,K = size(Φ[1]);
-    traces = zeros(length(Φ));
-    for ix in 1:length(Φ)
-        Q = Φ[ix];
-        traces[ix] = sum([Q[n,:]'*Q[n,:] for n in 1:N]);
-    end
+    traces = [norm(x*x) for x in Φ];
+    
+    tensors = ITensor[];
+    Φ_new = ITensor[];
 
     for ix in 1:2:length(Φ)
         next = ix == length(Φ) ? ix-1 : ix + 1;
-        Q = [Φ[ix] Φ[next]];
-
         trace = sum(traces[filter(x->!(x in [ix, next]), 1:length(traces))]);
-        T, P = coarse_grain_site( Q, trace );
-        push!(tensors, T);
-        push!(features, P);
+        U, ϕ = coarse_grain_site( Φ[ix], Φ[next], trace);
+        push!(tensors, U);
+        push!(Φ_new, ϕ);
     end
-    return (tensors, features)
+
+    return (tensors, Φ_new)
 end
 
 
-function coarse_grain_site( Q, trace )
-    N, K = size( Q );
-    Ω = zeros(K, K);
-
-    for n in 1:N
-        Ω += Q[n,:]*Q[n,:]';
-    end
-
+function coarse_grain_site( A, B, trace )
+    s1 = findindex(A, "site");
+    s2 = findindex(B, "site");
+    ix_obs = findindex(A, "obs");
+    Ω = (A*prime(A, s1))*(B*prime(B, s2));
     trace = (trace == 0.0) ? 1 : trace;
-    Ω *= (trace / Float64(N));
-    λ, U = eigen( Ω );
-    
-    if any(x -> x < -1, λ)
-        @error "Covariance matrix is not PSD! Eigenvalues: $(λ)"
-        throw(TypeError("Covariance matrix is not PSD"))
-    end
 
-    ix = findall(x -> x > EPS, cumsum( λ ) / tr( Ω ))[1];
-    U = U[:,ix:end];
-    P = Q*U;
-    return (U, P)
+    N = size(A,1);
+    Ω *= (trace / Float64(N));
+    Ω /= norm( Ω );  # this should help with numerical precision...
+    U, λ, V = svd( Ω, s1, s2, cutoff=EPS );
+
+    # This isn't very efficient... Should optimize somehow at some point
+    ϕ = zip_apply(A, B, U);
+
+    return (U, ϕ)
+end
+
+
+function zip_apply(A::ITensor, B::ITensor, U::ITensor)
+    s1 = findindex(A, "site");
+    s2 = findindex(B, "site");
+    ix_obs = findindex(A, "obs");
+    ix_u = findindex(U, "Link,u");
+    ix_site = replacetags(ix_u, "Link,u", "site");
+
+    N = dim(ix_obs)
+    K = dim(ix_site);
+    ϕ = ITensor(ix_obs, ix_site);
+
+    # This isn't very efficient... Should optimize somehow at some point
+    for n in 1:N
+        t1 = ITensor(s1);
+        for k in 1:dim(s1)
+            t1[s1(k)] = A[ix_obs(n), s1(k)];
+        end
+        t2 = ITensor(s2);
+        for k in 1:dim(s2)
+            t2[s2(k)] = B[ix_obs(n), s2(k)];
+        end
+        u = t1*U*t2
+        for k in 1:K
+            ϕ[ix_obs(n), ix_site(k)] = u[ix_u(k)];
+        end 
+    end
+    return ϕ
 end
 
 
