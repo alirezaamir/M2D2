@@ -15,6 +15,7 @@ int main() {
     auto y = A*w;
 
     auto [U,S,V] = svd(A, {i});
+    Print(findIndex(U, "U,Link"));
     Print(U);
     Print(V);
     Print(S*V);

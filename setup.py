@@ -6,7 +6,7 @@ compiler_args = ["-std=c++17",
                  "-shared",
                  "-fopenmp"]
 extension = Extension(
-    "tnml", ["tnml.cc"], extra_compile_args=compiler_args,
+    "tcgrn", ["tcgrn.cc"], extra_compile_args=compiler_args,
     library_dirs=["/home/ahthomas/Research/itensor/lib",
                   "/usr/local/opt/openblas/lib",
                   "/usr/lib/x86_64-linux-gnu/"],
@@ -14,4 +14,4 @@ extension = Extension(
     include_dirs=["/home/ahthomas/Research/itensor",
                   "/usr/local/opt/openblas/include",
                   "/usr/include/boost"])
-setup(name="tnml", version="1.0", ext_modules=[extension])
+setup(name="tcgrn", version="1.0", ext_modules=[extension])
