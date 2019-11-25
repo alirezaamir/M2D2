@@ -1,15 +1,18 @@
 using Images
 using Profile
+using ITensors
 using TestImages
 using Statistics
 using MLDatasets
+using Distributed
 using ScikitLearn
 using LinearAlgebra
 
 @sk_import linear_model: LogisticRegression
 
-const EPS = 1e-3;
-
+addprocs(Int(length(Sys.cpu_info()) / 2))
+@everywhere push!(LOAD_PATH, pwd());
+@everywhere using TCGRNUtils
 
 function main()
     @info "Loading training data..."
@@ -19,12 +22,19 @@ function main()
     X = reshape(X, P*Q, N);
     K = P*Q;
 
-    tensors = Array{Array{Float64,2}}[];
-    Φ = [[ones(1,N); X[ix,:]'] for ix in 1:K];
+    obs_index = Index(N, "obs");
+    tensors = ITensor[];
+    Φ = ITensor[];
+    for k in 1:K
+        site_index = Index(2, "site");
+        ϕ = fill!(ITensor(site_index, obs_index), 1.0);
+        ϕ.store.data[2:2:2*N] = X[k,:];
+        push!(Φ, ϕ);
+    end
 
     layer = 1;
     while length(Φ) > 1
-        global layer, Φ, tensors;
+        # global layer, Φ, tensors;
         @info "Coarse Graining Layer $layer";
         @time T, Φ = coarse_grain_layer( Φ );
         push!(tensors);
@@ -41,71 +51,17 @@ function main()
     @info "Accuracy: $acc"
 end
 
-function rescale!(X)
-    for ix in 1:size(X,1)
-        M = @view X[ix,:]
-        if (M[1] == mean(M)) continue; end
-        X[ix,:] = (M .- minimum(M)) ./ (minimum(M) - maximum(M)); 
-    end
-end
-
 
 function coarse_grain_layer( Φ )
-    tensors = Array{Float64,2}[];
-    features = Array{Float64,2}[];
+    num_sites_new = Int(ceil(length(Φ)/2.0));
+    tensors = Array{Any,1}(nothing, num_sites_new);
+    features = Array{Any,1}(nothing, num_sites_new);
 
     K,N = size(Φ[1]);
-
-    for ix in 1:2:length(Φ)
-        next = ix == length(Φ) ? ix-1 : ix + 1;
-        T, P = coarse_grain_site( Φ[ix], Φ[next] );
-        push!(tensors, T);
-        push!(features, P);
-    end
+    next(x) = x == length(Φ) ? x-1 : x + 1;
+    res = pmap(x->TCGRNUtils.coarse_grain_site(Φ[x], Φ[next], x), 1:2:4)
     return (tensors, features)
 end
 
 
-function coarse_grain_site( A, B )
-    K, N = size( A );
-    M = size( B, 1 );
-
-    Q = [A; B];
-    Ω = Q*Q';
-    if sum(Ω) == 0
-        @error "Covariance matrix is all zeros!"
-        throw(TypeError("Invalid covariance matrix"))
-    end
-
-    Ω /= Float64(N);
-    λ, U = eigen( Ω );
-    
-    if any(x -> x < -1e-5, λ)
-        @error "Covariance matrix is not PSD! Eigenvalues: $(λ)"
-        throw(TypeError("Covariance matrix is not PSD"))
-    end
-
-    ix = findall(x -> x > EPS, cumsum( λ ) ./ sum( λ ))[1];
-    U = U[:,ix:end];
-    P = U'*Q;    
-    return (U, P)
-end
-
-
-function accum_covmat(A::Array{Float64,2}, B::Array{Float64,2})
-    K,N = size( A );
-    M = size( B, 1 );
-
-    ω = zeros(K, M);
-    Ω = zeros(K*M, K*M);
-    for n in 1:N
-        BLAS.ger!(1.0, A[:,n], B[:,n], ω);
-        BLAS.ger!(1.0, ω[:], ω[:], Ω);
-        fill!(ω, 0.0);
-    end
-
-    return Ω
-end
-
-
-# main();
+main();
