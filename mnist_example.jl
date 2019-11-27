@@ -1,63 +1,53 @@
-using HDF5
+using NPZ
+using Images
+using Profile
+using TestImages
 using Statistics
+using MLDatasets
 using ScikitLearn
 using LinearAlgebra
 
 @sk_import linear_model: LogisticRegression
 
-@enum Mode direct_sum tensor_prod;
-const SRATE = 256;
+@enum Mode direct_sum tensor_prod
 
 function main()
-    duration_min = 10;
+    @info "Loading training data..."
+    x_train, y_train = MNIST.traindata();
+    X = convert(Array{Float64}, MNIST.convert2features(x_train));
+    K,N = size( X );
+
     tensors = Array{Array{Float64,2}}[];
     decomp_mode = Array{Mode,1}[];
-    Φ_orig, y = prepare_data(duration_min);
-    
-    Φ = copy(Φ_orig);
-    maxv = maximum([maximum(ϕ) for ϕ in Φ]);
-    minv = minimum([minimum(ϕ) for ϕ in Φ]);
-    for ix in 1:length(Φ)
-        Φ[ix] = (Φ[ix] .- minv) ./ (maxv - minv);
-    end
+    Φ = [[ones(1,N); X[ix,:]'] for ix in 1:K];
 
-    ε = 1e-7;
+    eps = 1e-3;
+    layer = 1;
     while length(Φ) > 1
-        global Φ, ε
-        U, Φ, M = coarse_grain_layer(Φ, ε);
-        push!(tensors, U);
+        global layer, Φ, tensors, eps;
+        @info "Coarse Graining Layer $layer => ε = $(eps)";
+        @time T, Φ, M = coarse_grain_layer( Φ, eps );
+        push!(tensors, T);
         push!(decomp_mode, M);
-        for ϕ in Φ @show maximum(ϕ); end
+        layer += 1;
     end
-end
+    
+    @info "Final dim: $(size( Φ[1] ))"
 
+    clf = LogisticRegression();
+    fit!(clf, Φ[1]', y_train);
+    acc_train = score(clf, Φ[1]', y_train);
 
-function prepare_data(duration_min)
-    h5_file = h5open("eeg_data_sample.h5");
-    stride = duration_min*SRATE;
+    x_test, y_test = MNIST.testdata();
+    X = convert(Array{Float64}, MNIST.convert2features(x_test));
+    K,N = size( X );
 
-    num_obs = Int64[];
-    for obj in h5_file
-        push!(num_obs, size(obj,2));
-    end
-    ixs = stride+1:stride:minimum(num_obs);
-    num_files = length(names(h5_file));
+    Φ_test = [[ones(1,N); X[ix,:]'] for ix in 1:K];
+    Φ_test = coarse_grain_data(Φ_test, tensors, decomp_mode);
 
-    Φ = [ones(3, num_files*length(ixs)) for _ in 1:stride];
-    y = zeros(num_files*length(ixs));
-    col = 1;
-    for obj in h5_file
-        data = read(obj);
-        for k in ixs
-            slice = @view data[1:2,k-stride:k-1];
-            y[col] = any(x -> x > 0, data[3,k-stride:k-1]);
-            for site in 1:stride 
-                Φ[site][2:3,col] = slice[:,site]; 
-            end
-            col += 1;
-        end
-    end
-    return Φ, y
+    acc_test = score(clf, Φ_test[1]', y_test);
+    @info "Train Accuracy: $acc_train"
+    @info "Test Accuracy: $acc_test"
 end
 
 
@@ -83,12 +73,13 @@ function coarse_grain_site( A::Array{Float64,2}, B::Array{Float64,2}, eps::Float
     K, N = size( A );
     M = size( B, 1 );
 
-    mode = K*M > 1024 ? direct_sum : tensor_prod
+    mode = K*M > 10000 ? direct_sum : tensor_prod
     @info "Array size: $K x $M => Mode: $mode"
 
     Ω = mode == direct_sum ? accum_covmat_sum(A, B) : accum_covmat_prod(A, B);
-    if sum( Ω ) == 0
-        @warn "Covariance matrix is all zeros!"
+    if sum(Ω) == 0
+        @error "Covariance matrix is all zeros!"
+        throw(TypeError("Invalid covariance matrix"))
     end
 
     Ω /= norm(Ω);
@@ -102,8 +93,7 @@ function coarse_grain_site( A::Array{Float64,2}, B::Array{Float64,2}, eps::Float
         throw(TypeError("Covariance matrix is not PSD"))
     end
 
-    @info "Eigenvalue ratios: $(cumsum( λ ) ./ sum( λ ))"
-    ix = sum(λ) == 0 ? 1.0 : findall(x -> x > eps, cumsum( λ ) ./ sum( λ ))[1];
+    ix = findall(x -> x > eps, cumsum( λ ) ./ sum( λ ))[1];
     U = U[:,ix:end];
     P = mode == direct_sum ? project_sum(U, A, B) : project_prod(U, A, B);
 
@@ -186,3 +176,5 @@ function project_sum(U::Array{Float64,2}, A::Array{Float64,2}, B::Array{Float64,
     end
     return P
 end
+
+main();

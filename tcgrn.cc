@@ -12,7 +12,6 @@
 #include "itensor/all.h"
 
 #define EPS 0.0001
-#define MAX_DIM 150
 #define REAL(x) static_cast<double>(x)
 #define INT(x) static_cast<int>(x)
 #define NUM_SITES_NEW(K) INT(ceil(REAL(K) / 2.));
@@ -24,8 +23,15 @@ using namespace std;
 // the inner vector represents features 
 typedef vector<vector<ITensor>> PHI_t;
 
-void coarse_grain_site(size_t ix, size_t next, PHI_t &phi, PHI_t &phi_new);
-void coarse_grain_layer(PHI_t &phi, PHI_t &phi_new);
+struct Layer {
+    PHI_t &phi;
+    vector<ITensor> &tensors;
+
+    Layer(PHI_t &phi, vector<ITensor> &tensors) : phi(phi), tensors(tensors) {};
+};
+
+void coarse_grain_site(size_t ix, size_t next, Real trace, PHI_t &phi, Layer &layer);
+void coarse_grain_layer(PHI_t &phi, Layer &layer);
 Real accum_trace(vector<Real> &traces, size_t ix, size_t next);
 
 tuple<size_t,size_t> sizep(PHI_t &phi) { 
@@ -63,7 +69,7 @@ static PyObject *tcgrn(PyObject *self, PyObject *args) {
     }
 
     PHI_t phi0;
-    BOOST_LOG_TRIVIAL(debug) << "Copying data...";
+    BOOST_LOG_TRIVIAL(info) << "Copying data...";
     for (size_t ii=0; ii<N; ii++) {
         auto row = vector<ITensor>();
         auto img = PyList_GetItem(data, ii);
@@ -79,16 +85,22 @@ static PyObject *tcgrn(PyObject *self, PyObject *args) {
 
     auto phi = phi0;
     uint layer = 1;
+    PHI_t tensors;
     while (phi[0].size() > 1) {
-        BOOST_LOG_TRIVIAL(debug) << "Coarse graining layer: " + to_string(layer++);
+        BOOST_LOG_TRIVIAL(info) << "Coarse graining layer: " + to_string(layer++);
 
+        // first allocate the storage for results
+        auto T = vector<ITensor>();
         PHI_t phi_new;
         for (size_t n=0; n<N; n++) {
             phi_new.push_back(vector<ITensor>());
         }
 
-        coarse_grain_layer(phi, phi_new);
+        Layer L(phi_new, T);
+        coarse_grain_layer(phi, L);
+
         phi = phi_new;
+        tensors.push_back(L.tensors);
     }
 
     // convert the results to Python list
@@ -100,7 +112,7 @@ static PyObject *tcgrn(PyObject *self, PyObject *args) {
 
     auto site_ix = findIndex(phi[0][0], "Site");
     Print(site_ix);
-    BOOST_LOG_TRIVIAL(debug) << "Final site dim: " << dim(site_ix);
+    BOOST_LOG_TRIVIAL(info) << "Final site dim: " << dim(site_ix);
 
     for (size_t n=0; n<N; n++) {
         PyObject *row = PyList_New(dim(site_ix));
@@ -126,53 +138,74 @@ static PyObject *tcgrn(PyObject *self, PyObject *args) {
     return cgrn_data;
 }
 
-void coarse_grain_layer(PHI_t &phi, PHI_t &phi_new) {
+void coarse_grain_layer(PHI_t &phi, Layer &layer) {
     auto [N, K] = sizep( phi );
     
+    vector<Real> traces(K, 0.0);
+
+    #pragma omp parallel for
+    for (size_t ii=0; ii<N; ii++) {
+        for (size_t jj=0; jj<K; jj++) {
+            traces[jj] += norm(phi[ii][jj]);
+        }
+    }
+
     for (size_t jj=0; jj<K; jj+=2) {
         size_t next = jj == K-1 ? jj-1 : jj+1;
-        BOOST_LOG_TRIVIAL(debug) << "Coarse graining sites: " << jj << " -> " << next;
-        coarse_grain_site(jj, next, phi, phi_new);
+        BOOST_LOG_TRIVIAL(info) << "Coarse graining sites: " << jj << " -> " << next;
+        auto trace = accum_trace(traces, jj, next);
+        coarse_grain_site(jj, next, trace, phi, layer);
     }
 }
 
+Real accum_trace(vector<Real> &traces, size_t ix, size_t next) {
+    Real trace = 0.0;
+    for (size_t jj=0; jj<traces.size(); jj++) {
+        if (jj != ix && jj != next) trace += traces.at(jj);
+    }
+    return trace;
+}
 
-void coarse_grain_site(size_t ix, size_t next, PHI_t &phi, PHI_t &phi_new) {
+void coarse_grain_site(size_t ix, size_t next, 
+    Real trace, PHI_t &phi, Layer &layer) {
     auto s1 = findIndex(phi[0][ix], "Site");
     auto s2 = findIndex(phi[0][next], "Site");
     auto C = ITensor(s1, s2, prime(s1), prime(s2));
 
+    trace = (trace == 0.0) ? 1.0 : trace;
     auto N = sizep( phi, 1 );
+    
     auto start = chrono::high_resolution_clock::now();
-
-    BOOST_LOG_TRIVIAL(debug) << "Index s1: " << dim(s1) << " s2: " << dim(s2);
+    #pragma omp parallel for
     for (uint n=0; n<N; n++){
-        auto S1 = phi[n].at(ix)*phi[n].at(next);
-        auto S2 = prime(phi[n].at(ix))*prime(phi[n].at(next));
+        auto S1 = phi[n].at(ix)*prime(phi[n].at(ix));
+        auto S2 = phi[n].at(next)*prime(phi[n].at(next));
         
+        #pragma omp critical
         C += S1*S2;
     }
     auto stop = chrono::high_resolution_clock::now();
     auto elapsed = stop - start;
-    BOOST_LOG_TRIVIAL(debug) << "Computing covamt took: " << elapsed.count();
+    BOOST_LOG_TRIVIAL(info) << "Computing covamt took: " << elapsed.count();
 
+    C *= REAL(N)*trace;
     C /= norm(C);
 
     start = chrono::high_resolution_clock::now();
     auto [U,S,V] = svd(C, {s1, s2}, {"Cutoff", EPS});
     stop = chrono::high_resolution_clock::now();
     elapsed = stop - start;
-    BOOST_LOG_TRIVIAL(debug) << "Computing SVD took: " << elapsed.count();
+    BOOST_LOG_TRIVIAL(info) << "Compuring SVD took: " << elapsed.count();
 
     auto link = findIndex(U, "U,Link");
     auto six = replaceTags(link, "U,Link", "Site");
     U = U*delta(link, six);
     Print(U);
 
-    #pragma omp parallel for
     for (size_t n=0; n<N; n++) {
-        phi_new[n].push_back(phi[n][ix]*U*phi[n][next]);
+        layer.phi[n].push_back(phi[n][ix]*U*phi[n][next]);
     }
+    layer.tensors.push_back(U);
 }
 
 static PyMethodDef tcgrn_methods[] = {
