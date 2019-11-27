@@ -9,10 +9,25 @@ using LinearAlgebra
 const SRATE = 256;
 
 function main()
-    duration_min = 10;
-    tensors = Array{Array{Float64,2}}[];
-    decomp_mode = Array{Mode,1}[];
-    Φ_orig, y = prepare_data(duration_min);
+    const duration_min = 5;
+
+    h5_in_file = h5open("../input/eeg_data_temples2.h5");
+    subject_ids = names(h5_in_file);
+
+    h5open("../temp/coarse_grained_data.h5", "w") do h5_out_file
+        for subject in subject_ids
+            X, y = process_subject(subject, h5_in_file, duration_min);
+            write(h5_out_file, subject, X)
+        end
+    end
+
+    close(h5_file);
+end
+
+
+function process_subject(subject_id, h5_file, duration_min)
+    h5_node = h5_file[subject_id];
+    Φ_orig, y = prepare_data(duration_min, h5_node);
     
     Φ = copy(Φ_orig);
     maxv = maximum([maximum(ϕ) for ϕ in Φ]);
@@ -22,33 +37,37 @@ function main()
     end
 
     ε = 1e-7;
+    decomp_mode = Array{Mode,1}[];
+    tensors = Array{Array{Float64,2}}[];
     while length(Φ) > 1
-        global Φ, ε
         U, Φ, M = coarse_grain_layer(Φ, ε);
         push!(tensors, U);
         push!(decomp_mode, M);
         for ϕ in Φ @show maximum(ϕ); end
     end
+
+    X = Φ[1];
+    @info "Final dimension: $(size(X))"
+
+    return X, y
 end
 
 
-function prepare_data(duration_min)
-    h5_file = h5open("eeg_data_sample.h5");
+function prepare_data(duration_min, h5_node)
     stride = duration_min*SRATE;
 
-    num_obs = Int64[];
-    for obj in h5_file
-        push!(num_obs, size(obj,2));
+    num_obs = 0;
+    for obj in h5_node
+        ixs = stride+1:stride:size(obj,2)
+        num_obs += length(ixs);
     end
-    ixs = stride+1:stride:minimum(num_obs);
-    num_files = length(names(h5_file));
 
-    Φ = [ones(3, num_files*length(ixs)) for _ in 1:stride];
-    y = zeros(num_files*length(ixs));
+    Φ = [ones(3, num_obs) for _ in 1:stride];
+    y = zeros(num_obs);
     col = 1;
-    for obj in h5_file
+    for obj in h5_node
         data = read(obj);
-        for k in ixs
+        for k in stride+1:stride:size(data,2)
             slice = @view data[1:2,k-stride:k-1];
             y[col] = any(x -> x > 0, data[3,k-stride:k-1]);
             for site in 1:stride 
@@ -86,13 +105,14 @@ function coarse_grain_site( A::Array{Float64,2}, B::Array{Float64,2}, eps::Float
     mode = K*M > 1024 ? direct_sum : tensor_prod
     @info "Array size: $K x $M => Mode: $mode"
 
-    Ω = mode == direct_sum ? accum_covmat_sum(A, B) : accum_covmat_prod(A, B);
+    @time Ω = mode == direct_sum ? accum_covmat_sum(A, B) : accum_covmat_prod(A, B);
     if sum( Ω ) == 0
         @warn "Covariance matrix is all zeros!"
+        throw(TypeError("Invalid covariance matrix"));
     end
 
     Ω /= norm(Ω);
-    λ, U = eigen( Symmetric(Ω) );
+    @time λ, U = eigen( Symmetric(Ω) );
     π = sortperm(λ);
     U = U[:,π];
     λ = λ[π];
@@ -102,7 +122,6 @@ function coarse_grain_site( A::Array{Float64,2}, B::Array{Float64,2}, eps::Float
         throw(TypeError("Covariance matrix is not PSD"))
     end
 
-    @info "Eigenvalue ratios: $(cumsum( λ ) ./ sum( λ ))"
     ix = sum(λ) == 0 ? 1.0 : findall(x -> x > eps, cumsum( λ ) ./ sum( λ ))[1];
     U = U[:,ix:end];
     P = mode == direct_sum ? project_sum(U, A, B) : project_prod(U, A, B);
