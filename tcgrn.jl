@@ -9,7 +9,7 @@ using LinearAlgebra
 const SRATE = 256;
 
 function main()
-    const duration_min = 5;
+    duration_min = 5;
 
     h5_in_file = h5open("../input/eeg_data_temples2.h5");
     subject_ids = names(h5_in_file);
