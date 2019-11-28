@@ -1,10 +1,8 @@
 using HDF5
 using Statistics
 using Distributed
-using ScikitLearn
 using LinearAlgebra
 
-@sk_import linear_model: LogisticRegression
 @everywhere include("tcgrn_utils.jl")
 @everywhere using .TCGRN
 

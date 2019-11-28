@@ -59,7 +59,6 @@ function prepare_data(h5_node)
         for k in stride+1:stride:size(data,2)
             slice = @view data[1:2,k-stride:k-1];
             y[col] = any(x -> x > 0, data[3,k-stride:k-1]);
-            @show sum(data[3,k-stride:k-1]);
             for site in 1:stride 
                 Φ[site][2:3,col] = slice[:,site]; 
             end
