@@ -20,20 +20,25 @@ function process_subject(subject_id)
         Φ[ix] = (Φ[ix] .- minv) ./ (maxv - minv);
     end
 
-    ε = 1e-7;
+    ε = 1e-5;
+    layer = 1;
     decomp_mode = Array{Mode,1}[];
     tensors = Array{Array{Float64,2}}[];
     while length(Φ) > 1
+        global Φ, ε, tensors, decomp_mode, layer
+        @info "Coarse graining layer: $layer"
+        max_dim = maximum([size(ϕ,1) for ϕ in Φ]);
+        @info "Maximum dim: $max_dim"
         U, Φ, M = coarse_grain_layer(Φ, ε);
         push!(tensors, U);
         push!(decomp_mode, M);
-        for ϕ in Φ @show maximum(ϕ); end
+        layer += 1;
     end
 
     X = Φ[1];
     @info "Final dimension: $(size(X))"
 
-    h5_open("../temp/cgrn_$(subject_id).h5", "w") do h5_file
+    h5open("../temp/cgrn_$(subject_id).h5", "w") do h5_file
         write(h5_file, "X", X);
         write(h5_file, "y", y);
     end
@@ -52,10 +57,10 @@ function prepare_data(h5_node)
     Φ = [ones(3, num_obs) for _ in 1:stride];
     y = zeros(num_obs);
     col = 1;
+    total_yes = 0.0;
     for obj in h5_node
         data = read(obj);
-        @show sum(data[3,:])
-        isum = 0
+        total_yes += sum(data[3,:] .> 0);
         for k in stride+1:stride:size(data,2)
             slice = @view data[1:2,k-stride:k-1];
             y[col] = any(x -> x > 0, data[3,k-stride:k-1]);
@@ -65,6 +70,7 @@ function prepare_data(h5_node)
             col += 1;
         end
     end
+    @info "Total pos obs: $total_yes"
     return Φ, y
 end
 
