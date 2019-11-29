@@ -25,7 +25,7 @@ function process_subject(subject_id)
     decomp_mode = Array{Mode,1}[];
     tensors = Array{Array{Float64,2}}[];
     while length(Φ) > 1
-        global Φ, ε, tensors, decomp_mode, layer
+        # global Φ, ε, tensors, decomp_mode, layer
         @info "Coarse graining layer: $layer"
         max_dim = maximum([size(ϕ,1) for ϕ in Φ]);
         @info "Maximum dim: $max_dim"
