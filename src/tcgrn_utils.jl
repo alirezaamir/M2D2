@@ -23,12 +23,12 @@ function process_subject(subject_id, ε)
     h5_file = HDF5.h5open("../temp/decomp_$subject_id.h5", "w")
 
     while length(Φ) > 1
-        @info "Coarse graining layer: $layer"
-        @info "Number of sites: $(length(Φ))"
+        println("Coarse graining layer: $layer");
         max_dim = maximum([size(S.ϕ,1) for S in Φ]);
-        @info "Maximum dim: $max_dim"
         Φ = coarse_grain_layer(Φ, ε);
-        @info "Positive fraction: $(mean([S.y for S in Φ]))"
+        @println(join(["Maximum dimension: $max_dim", 
+                       "Num sites: $(length(Φ))", 
+                       "Positive fraction: $(mean([S.y for S in Φ]))"], "\n"));
         write_layer(Φ, layer, h5_file);
         layer += 1;
     end
