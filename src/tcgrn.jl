@@ -16,8 +16,9 @@ function main()
     h5_file = HDF5.h5open("../input/eeg_data_temples2.h5")
     subject_ids = HDF5.names(h5_file);
     close(h5_file)
+    #show subject_ids
 
-    ε = 1e-9
+    ε = 1e-9*ones(length(subject_ids))
     # TCGRN.process_subject(subject_ids[1], ε);
     pmap(TCGRN.process_subject, subject_ids, ε);
 end
@@ -76,3 +77,4 @@ end
 end
 
 main()
+
