@@ -17,8 +17,7 @@ function main()
     subject_ids = HDF5.names(h5_file);
     close(h5_file)
 
-    ε = 1e-9
-    # TCGRN.process_subject(subject_ids[1], ε);
+    ε = 1e-9*ones(length(subject_ids));
     pmap(TCGRN.process_subject, subject_ids, ε);
 end
 
@@ -27,7 +26,7 @@ function analysis(subject_id)
     X = HDF5.h5read("../temp/cgrn_$(subject_id).h5", "/X");
     y = HDF5.h5read("../temp/cgrn_$(subject_id).h5", "y");
 
-    X_no = X[:,y .== 0];
+    X_no = X[:, y .== 0];
     X_yes = X[:, y .== 1];
 
     mmd = compute_mmd(X_yes, X_no);

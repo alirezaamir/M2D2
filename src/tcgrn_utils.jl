@@ -129,16 +129,15 @@ function coarse_grain_site( A::Array{Float64,2}, B::Array{Float64,2}, eps::Float
     @debug "Array size: $K x $M => Mode: $mode"
 
     Ω = mode == direct_sum ? accum_covmat_sum(A, B) : accum_covmat_prod(A, B);
-    if sum( Ω ) == 0
-        @warn "Covariance matrix is all zeros!"
-        throw(TypeError("Invalid covariance matrix"));
-    end
-
     Ω /= norm(Ω);
     λ, U = eigen( Symmetric(Ω) );
     π = sortperm(λ);
     U = U[:,π];
     λ = λ[π];
+    if sum(λ) == 0
+        @warn "Eigenvalues were all zero!"
+        λ[end] = 1.0;
+    end
     
     if any(x -> x < -1e-5, λ)
         @error "Covariance matrix is not PSD! Eigenvalues: $(λ)"
