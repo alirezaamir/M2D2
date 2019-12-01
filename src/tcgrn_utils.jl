@@ -10,12 +10,14 @@ const DURATION_SEC = 10
 
 export process_subject
 function process_subject(subject_id, ε)
-    h5_file = HDF5.h5open("../input/eeg_data_temples2.h5", "r")
+    println("Opening data file");
+    h5_file = HDF5.h5open("../input/eeg_data_temples2.h5", "r");
     h5_node = h5_file[subject_id];
+    println("Preparing data for subject $subject_id");
     Φ = prepare_data(h5_node);
     close(h5_file);
 
-    @info "Positive fraction: $(mean([S.y for S in Φ]))"
+    println("Positive fraction: $(mean([S.y for S in Φ]))")
 
     layer = 1;
     h5_file = HDF5.h5open("../temp/decomp_$subject_id.h5", "w")
