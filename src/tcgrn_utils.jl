@@ -26,9 +26,9 @@ function process_subject(subject_id, ε)
         println("Coarse graining layer: $layer");
         max_dim = maximum([size(S.ϕ,1) for S in Φ]);
         Φ = coarse_grain_layer(Φ, ε);
-        @println(join(["Maximum dimension: $max_dim", 
-                       "Num sites: $(length(Φ))", 
-                       "Positive fraction: $(mean([S.y for S in Φ]))"], "\n"));
+        println(join(["Maximum dimension: $max_dim", 
+                      "Num sites: $(length(Φ))", 
+                      "Positive fraction: $(mean([S.y for S in Φ]))"], "\n"));
         write_layer(Φ, layer, h5_file);
         layer += 1;
     end
