@@ -1,95 +1,123 @@
 module TCGRN
 using HDF5
+using Statistics
 using LinearAlgebra
 
 @enum Mode direct_sum tensor_prod;
 const SRATE = 256;
 const DURATION_SEC = 10
 
-export process_subject
-function process_subject(subject_id)
-    h5_file = h5open("../input/eeg_data_temples2.h5", "r")
-    h5_node = h5_file[subject_id];
-    Φ_orig, y = prepare_data(h5_node);
-    close(h5_file);
-    
-    Φ = copy(Φ_orig);
-    maxv = maximum([maximum(ϕ) for ϕ in Φ]);
-    minv = minimum([minimum(ϕ) for ϕ in Φ]);
-    for ix in 1:length(Φ)
-        Φ[ix] = (Φ[ix] .- minv) ./ (maxv - minv);
-    end
 
-    ε = 1e-5;
+export process_subject
+function process_subject(subject_id, ε)
+    h5_file = HDF5.h5open("../input/eeg_data_temples2.h5", "r")
+    h5_node = h5_file[subject_id];
+    Φ = prepare_data(h5_node);
+    close(h5_file);
+
+    @info "Positive fraction: $(mean([S.y for S in Φ]))"
+
     layer = 1;
-    decomp_mode = Array{Mode,1}[];
-    tensors = Array{Array{Float64,2}}[];
+    h5_file = HDF5.h5open("../temp/decomp_$subject_id.h5", "w")
+
     while length(Φ) > 1
-        # global Φ, ε, tensors, decomp_mode, layer
         @info "Coarse graining layer: $layer"
-        max_dim = maximum([size(ϕ,1) for ϕ in Φ]);
+        @info "Number of sites: $(length(Φ))"
+        max_dim = maximum([size(S.ϕ,1) for S in Φ]);
         @info "Maximum dim: $max_dim"
-        U, Φ, M = coarse_grain_layer(Φ, ε);
-        push!(tensors, U);
-        push!(decomp_mode, M);
+        Φ = coarse_grain_layer(Φ, ε);
+        @info "Positive fraction: $(mean([S.y for S in Φ]))"
+        write_layer(Φ, layer, h5_file);
         layer += 1;
     end
 
-    X = Φ[1];
-    @info "Final dimension: $(size(X))"
+    close(h5_file);
+end
 
-    h5open("../temp/cgrn_$(subject_id).h5", "w") do h5_file
-        write(h5_file, "X", X);
-        write(h5_file, "y", y);
+
+function write_layer(Φ, layer_num, h5_file)
+    num_sites = length(Φ);
+    h5_node = HDF5.g_create(h5_file, "layer$layer_num");
+    for s in num_sites
+        site_node = HDF5.g_create(h5_node, "site$s")
+        write(site_node, "X", Φ[s].ϕ);
+        write(site_node, "y", Φ[s].y);
+        write(site_node, "U", Φ[s].U);
+        write(site_node, "mode", Int(Φ[s].M));
+        write(site_node, "eigvals", Φ[s].λ);
     end
+end
+
+
+struct SiteInfo
+    U::Array{Float64,2};
+    λ::Array{Float64,1};
+    ϕ::Array{Float64,2};
+    M::Mode;
+    y::Bool;
 end
 
 
 function prepare_data(h5_node)
-    stride = DURATION_SEC*SRATE;
+    stride = 3*SRATE;
+    seg_length = DURATION_SEC*SRATE;
 
-    num_obs = 0;
-    for obj in h5_node
-        ixs = stride+1:stride:size(obj,2)
-        num_obs += length(ixs);
-    end
+    Φ = SiteInfo[];
 
-    Φ = [ones(3, num_obs) for _ in 1:stride];
-    y = zeros(num_obs);
-    col = 1;
-    total_yes = 0.0;
+    minv, maxv = get_scaler(h5_node);
     for obj in h5_node
         data = read(obj);
-        total_yes += sum(data[3,:] .> 0);
-        for k in stride+1:stride:size(data,2)
-            slice = @view data[1:2,k-stride:k-1];
-            y[col] = any(x -> x > 0, data[3,k-stride:k-1]);
-            for site in 1:stride 
-                Φ[site][2:3,col] = slice[:,site]; 
-            end
-            col += 1;
+        for k in seg_length+1:seg_length:size(data,2)
+            y = any(x -> x > 0, data[3,k-seg_length:k-1]);
+            ϕ = ones(4, seg_length);
+            ϕ[2:3,:] = data[1:2,k-seg_length:k-1];
+            ϕ[4,:] = ϕ[2,:] .* ϕ[3,:];
+            ϕ = ϕ .- minv ./ (maxv - minv);
+            S = SiteInfo(zeros(2,2), zeros(2), ϕ, direct_sum, y);
+            push!(Φ, S);
         end
     end
-    @info "Total pos obs: $total_yes"
-    return Φ, y
+
+    return Φ
 end
 
 
-function coarse_grain_layer( Φ, eps )
-    tensors = Array{Float64,2}[];
-    features = Array{Float64,2}[];
-    decomp_mode = Mode[];
+function get_scaler(h5_node)
+    h5_file = HDF5.h5open("../temp/bounds.h5", "cw");
+    subject_id = replace(HDF5.name(h5_node), "/" => "");
+    if !(subject_id in names(h5_file))
+        minv = Float64[];
+        maxv = Float64[];
+        for obj in h5_node
+            data = read(obj)[1:2,:]
+            push!(minv, minimum(data))
+            push!(maxv, maximum(data));
+        end
+        group = HDF5.g_create(h5_file, subject_id);
+        write(group, "minv", minimum(minv));
+        write(group, "maxv", maximum(maxv));
+    end
+    g = h5_file["$subject_id"];
+    minv = read(g["minv"]);
+    maxv = read(g["maxv"]);
+    return minv, maxv
+end
 
-    K,N = size(Φ[1]);
+
+function coarse_grain_layer( Φ::Array{SiteInfo,1}, eps::Float64 )
+    features = Array{Float64,2}[];
+    y_new = Bool[];
+    L = SiteInfo[];
+
+    K,N = size(Φ[1].ϕ);
 
     for ix in 1:2:length(Φ)
         next = ix == length(Φ) ? ix-1 : ix + 1;
-        T, P, m = coarse_grain_site( Φ[ix], Φ[next], eps );
-        push!(tensors, T);
-        push!(features, P);
-        push!(decomp_mode, m);
+        T, P, m, λ = coarse_grain_site( Φ[ix].ϕ, Φ[next].ϕ, eps );
+        S = SiteInfo(T, λ, P, m, Φ[ix].y | Φ[next].y);
+        push!(L, S)
     end
-    return (tensors, features, decomp_mode)
+    return L
 end
 
 
@@ -121,7 +149,7 @@ function coarse_grain_site( A::Array{Float64,2}, B::Array{Float64,2}, eps::Float
     U = U[:,ix:end];
     P = mode == direct_sum ? project_sum(U, A, B) : project_prod(U, A, B);
 
-    return (U, P, mode)
+    return (U, P, mode, λ)
 end
 
 
