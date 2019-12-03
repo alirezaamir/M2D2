@@ -6,9 +6,9 @@ using LinearAlgebra
 @enum Mode direct_sum tensor_prod;
 const SRATE = 256;
 const DURATION_SEC = 10
+const ZERO_THRESH = 1e-10;
 
-
-export process_subject
+export process_subject, prepare_data, Mode
 function process_subject(subject_id, ε)
     println("Opening data file");
     h5_file = HDF5.h5open("../input/eeg_data_temples2.h5", "r");
@@ -20,30 +20,30 @@ function process_subject(subject_id, ε)
     println("Positive fraction: $(mean([S.y for S in Φ]))")
 
     layer = 1;
-    h5_file = HDF5.h5open("../temp/decomp_$subject_id.h5", "w")
-
-    while length(Φ) > 1
-        println("Coarse graining layer: $layer");
-        max_dim = maximum([size(S.ϕ,1) for S in Φ]);
-        Φ = coarse_grain_layer(Φ, ε);
-        println(join(["Maximum dimension: $max_dim", 
-                      "Num sites: $(length(Φ))", 
-                      "Positive fraction: $(mean([S.y for S in Φ]))"], "\n"));
-        write_layer(Φ, layer, h5_file);
-        layer += 1;
+    if !isdir("../temp/$(ε)")
+        mkpath("../temp/$(ε)");
     end
-
-    close(h5_file);
+    
+    HDF5.h5open("../temp/$(ε)/decomp_$subject_id.h5", "w") do h5_file
+        while length(Φ) > 1
+            println("Coarse graining layer: $layer");
+            max_dim = maximum([size(S.ϕ,1) for S in Φ]);
+            Φ = coarse_grain_layer(Φ, ε);
+            println(join(["Maximum dimension: $max_dim", 
+                        "Num sites: $(length(Φ))", 
+                        "Positive fraction: $(mean([S.y for S in Φ]))"], "\n"));
+            write_layer(Φ, layer, h5_file);
+            layer += 1;
+        end
+    end
 end
 
 
 function write_layer(Φ, layer_num, h5_file)
     num_sites = length(Φ);
     h5_node = HDF5.g_create(h5_file, "layer$layer_num");
-    for s in num_sites
+    for s in 1:num_sites
         site_node = HDF5.g_create(h5_node, "site$s")
-        write(site_node, "X", Φ[s].ϕ);
-        write(site_node, "y", Φ[s].y);
         write(site_node, "U", Φ[s].U);
         write(site_node, "mode", Int(Φ[s].M));
         write(site_node, "eigvals", Φ[s].λ);
@@ -72,9 +72,8 @@ function prepare_data(h5_node)
         for k in seg_length+1:seg_length:size(data,2)
             y = any(x -> x > 0, data[3,k-seg_length:k-1]);
             ϕ = ones(4, seg_length);
-            ϕ[2:3,:] = data[1:2,k-seg_length:k-1];
+            ϕ[2:3,:] = (data[1:2,k-seg_length:k-1] .- minv) ./ (maxv - minv);
             ϕ[4,:] = ϕ[2,:] .* ϕ[3,:];
-            ϕ = ϕ .- minv ./ (maxv - minv);
             S = SiteInfo(zeros(2,2), zeros(2), ϕ, direct_sum, y);
             push!(Φ, S);
         end
@@ -102,6 +101,7 @@ function get_scaler(h5_node)
     g = h5_file["$subject_id"];
     minv = read(g["minv"]);
     maxv = read(g["maxv"]);
+    close(h5_file);
     return minv, maxv
 end
 
@@ -127,6 +127,9 @@ function coarse_grain_site( A::Array{Float64,2}, B::Array{Float64,2}, eps::Float
     K, N = size( A );
     M = size( B, 1 );
 
+    A /= norm(A);
+    B /= norm(B);
+    
     mode = K*M > 1024 ? direct_sum : tensor_prod
     @debug "Array size: $K x $M => Mode: $mode"
 
@@ -138,6 +141,11 @@ function coarse_grain_site( A::Array{Float64,2}, B::Array{Float64,2}, eps::Float
     λ = λ[π];
     if sum(λ) == 0
         @warn "Eigenvalues were all zero!"
+        @show Ω
+        @show λ
+        @show π
+        show(IOContext(stdout, :limit => true), "text/plain", A);
+        show(IOContext(stdout, :limit => true), "text/plain", B);
         λ[end] = 1.0;
     end
     
@@ -146,31 +154,13 @@ function coarse_grain_site( A::Array{Float64,2}, B::Array{Float64,2}, eps::Float
         throw(TypeError("Covariance matrix is not PSD"))
     end
 
-    ix = sum(λ) == 0 ? 1.0 : findall(x -> x > eps, cumsum( λ ) ./ sum( λ ))[1];
+    errors = findall(x -> x > eps, cumsum( λ ) ./ sum( λ ));
+    ix = length(errors) > 0 ? errors[1] : length(λ);
     U = U[:,ix:end];
     P = mode == direct_sum ? project_sum(U, A, B) : project_prod(U, A, B);
+    P[abs.(P) .< ZERO_THRESH] .= 0.0;
 
     return (U, P, mode, λ)
-end
-
-
-function coarse_grain_data( Φ, tensors, decomp_mode )
-    for ix_l in 1:length(tensors)
-        ix_u = 1
-        Φ¹ = Array{Float64,2}[];
-        for ix in 1:2:length(Φ)
-            next = ix == length(Φ) ? ix-1 : ix + 1;
-            A = Φ[ix];
-            B = Φ[next];
-            U = tensors[ix_l][ix_u];
-            mode = decomp_mode[ix_l][ix_u]; 
-            ϕ = mode == direct_sum ? project_sum(U, A, B) : project_prod(U, A, B);
-            push!(Φ¹, ϕ);
-            ix_u += 1;
-        end
-        Φ = Φ¹;
-    end
-    return Φ
 end
 
 
