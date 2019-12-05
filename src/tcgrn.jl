@@ -22,17 +22,35 @@ function main()
     subject_ids = HDF5.names(h5_file);
     close(h5_file)
 
-    ε_list = [1e-3, 1e-4, 1e-5, 1e-6, 1e-7];
-    for ε in ε_list
-        TCGRN.process_subject(subject_ids[1], ε);
-        features, labels = coarse_grain_data(subject_ids[1], 1e-5);
+    for subject_id in subject_ids
+        ε_list = [0.5, 1e-1, 1e-2, 1e-3, 1e-4];
+        for ε in ε_list
+            TCGRN.process_subject(subject_ids[1], 1e-7);
+            features, labels = coarse_grain_data(subject_ids[1], 1e-7);
+            dirname = "../output/$subject_id/$ε"
+            if !isdir(dirname)
+                mkpath(dirname);
+            end
+
+            mmd_between, mmd_within = layer_analysis_mmd(features, labels);
+            
+            open("$dirname/mmd_between.txt", "w") do fh
+                write(fh, "mmd,se,N\n");
+                for (mmd, se, N) in mmd_between write(fh, "$mmd,$se,$N\n"); end
+            end
+            open("$dirname/mmd_within.txt", "w") do fh
+                write(fh, "mm-d,se,N\n");
+                for (mmd, se, N) in mmd_within write(fh, "$mmd,$se,$N\n"); end
+            end
+        end
     end
 end
 
 
-function plot_eigenvalues(subject_id)
-    HDF5.h5open("../temp/decomp_$(subject_id).h5") do h5_file
-        for (l, layer_node) in enumerate(h5_file)
+function plot_eigenvalues(subject_id, labels, ε)
+    HDF5.h5open("../temp/$ε/decomp_$(subject_id).h5") do h5_file
+        for l in 1:length(labels)
+            layer_node = h5_file["layer$l"];
             eigs = Array{Float32,1}[];
             for site_node in layer_node
                 push!(eigs, read(site_node, "eigvals"));  
@@ -44,44 +62,59 @@ function plot_eigenvalues(subject_id)
                 λ[1:length(eigs[ix]),ix] = reverse(
                     cumsum(eigs[ix]) ./ sum(eigs[ix]));
             end
-            nanmean(x) = mean(filter(!isnan, x));
-            nanstd(x) = std(filter(!isnan, x));
-            μ = mapslices(nanmean, λ, dims=2);
-            σ = map(x -> isnan(x) ? 0.0 : x, mapslices(nanstd, λ, dims=2))
 
-            which = [ix for ix in 1:length(μ) if μ[ix] > 1e-5];
-            plot(which, vec(μ[which]), 
-                 linewidth=3, grid=false, yerror=vec(σ[which]), label="");
-            outpath = "../output/$subject_id/layer$l"
+            y = labels[l] .> 0.0;
+            nanmean(x) = mean(filter(!isnan, x));
+            μ_yes = mapslices(nanmean, λ[:,y], dims=2);
+            μ_no  = mapslices(nanmean, λ[:,.!y], dims=2);
+
+            which = [ix for ix in 1:length(μ_yes) if μ_yes[ix] > 1e-9];
+            ticks = [10.0^-x for x in 9:-1:0];
+            plot(which, log.(vec(μ_yes[which])), 
+                    linewidth=3, color=:darkgreen,
+                    yticks=(log.(ticks), ticks),
+                    ylims=(log(10^-9),0), label="Seizure");
+            plot!(which, log.(vec(μ_no[which])), 
+                    linewidth=3, color=:darkblue,
+                    yticks=(log.(ticks), ticks),
+                    ylims=(log(10^-9),0), label="Non-Seizure");
+            outpath = "../output/$subject_id/$ε/layer$l"
             if !isdir(outpath)
                 mkpath(outpath)
             end
-            savefig("$outpath/eigvals_level$l.png");
+            savefig("$outpath/eigenvals.png");
         end
     end
 end
 
 
-function layer_analysis_cancor(features, labels)
+function layer_analysis_cancor(features, labels, outdir)
     X_max = features[end][1];
     corrs = Array{Array{Float64,1},1}[];
-    for l in 1:length(features)
+    used_labels = Array{Bool,1}[];
+    for l in 1:min(5, length(features))
+        @info "Layer $l/$(length(features))"
         layer_corr = Array{Float64,1}[];
+
         for s in 1:length(features[l])
             X_l = features[l][s];
-            C = fit(CCA, X_max, X_l);
+            @time C = fit(CCA, X_max, X_l);
             push!(layer_corr, correlations(C));
         end
         push!(corrs, layer_corr);
     end
 
-    for l in 1:length(corrs)
+    for l in 1:5
         dim = maximum([length(x) for x in corrs[l]]);
         M = zeros(dim, length(corrs[l]));
         avg_corr = zeros(length(corrs[l]));
+        max_corr = zeros(length(corrs[l]));
+        min_corr = zeros(length(corrs[l]));
         for ix in 1:length(corrs[l])
             M[1:length(corrs[l][ix]),ix] = corrs[l][ix];
-            avg_corr = mean(corrs[l][ix]);
+            avg_corr[ix] = mean(corrs[l][ix]);
+            max_corr[ix] = maximum(corrs[l][ix]);
+            min_corr[ix] = minimum(corrs[l][ix]);
         end
         
         inds = [Bool(x) for x in labels[l]];
@@ -112,15 +145,41 @@ function layer_analysis_cancor(features, labels)
         ylabel!("Correlation");
         title!("Resolution (Seconds): $((2^l)*10)");
 
-        outpath = "../output/$subject_id/layer$l"
+        outpath = "$outdir/layer$l"
         if !isdir(outpath)
             mkpath(outpath)
         end
-        savefig("$outpath/correlates.png");
-        
-        plot(avg_corr, linewidth=3, color="darkgreen")
+        savefig("$outpath/correlates.png"); closeall();
 
+        plot(1:3:length(avg_corr), avg_corr[1:3:length(avg_corr)], 
+             linewidth=2, color="darkgreen", label="Mean");
+        plot!(1:3:length(avg_corr), min_corr[1:3:length(avg_corr)], 
+             linewidth=2, color="darkblue", label="Min");
+        plot!(1:3:length(avg_corr), max_corr[1:3:length(avg_corr)], 
+             linewidth=2, color="orange", label="Max");
+
+        ix = 1;
+        start = -1;
+        flag = false;
+        y = labels[l] .> 0;
+        while ix < length(y)
+            if y[ix] & (start < 0)
+                start = ix;
+            end
+            if !y[ix] & (start > 0)
+                @info "Seizure from: $start -> $ix"
+                vspan!([start, ix], color="red", label="");
+                start = -1;
+            end
+            ix += 1;
+        end
+        savefig("$outpath/ts_corr.png"); closeall();
     end
+end
+
+
+function logit(features, labels)
+
 end
 
 
@@ -160,7 +219,7 @@ function predict_layer(X, y, layer_node)
         site_node = layer_node["site$s"];
         mode = TCGRN.Mode(read(site_node["mode"]));
         U = read(site_node["U"]);
-        A = X[ix] / norm(X[ix]); B = X[next] / norm(X[next]);
+        A = X[ix]; B = X[next];
         try
             ϕ = mode == TCGRN.direct_sum ? 
                 TCGRN.project_sum(U, A, B) : TCGRN.project_prod(U, A, B);
@@ -180,45 +239,42 @@ function predict_layer(X, y, layer_node)
 end
 
 
-function layer_analysis_mmd(subject_id)
-    h5_file = HDF5.h5open("../input/eeg_data_temples2.h5", "r");
-    h5_node = h5_file[subject_id];
-    Φ = prepare_data(h5_node);
-    close(h5_file);
+function layer_analysis_mmd(features, labels)
+    mmd_between = Tuple{Float64,Float64,Int64}[];
+    mmd_within = Tuple{Float64,Float64,Int64}[];
+    for l in 1:min(5, length(features))
+        @info "Layer $l"
+        X = features[l];
+        y = map(x -> x > 0, labels[l]);
 
-    X = [S.ϕ for S in Φ];
-    y = [S.y for S in Φ];
-    mmd_within = Tuple{Float64,Float64}[];
-    mmd_between = Tuple{Float64,Float64}[];
-    h5open("../temp/decomp_$subject_id.h5") do h5_file
-        num_layers = length(names(h5_file));
-        for l in 1:num_layers
-            # global X, y, mmd_within, mmd_between;
-            layer_node = h5_file["layer$l"];
-            X, y = predict_layer(X, y, layer_node);
-            Φ_yes = copy(reduce(vcat, X[y])');
+        if length(y) == sum(y)
+            continue
+        end 
 
-            N = min(3*sum(y), length(y) - sum(y));
-            between = Float64[];
-            within = Float64[];
+        Φ_yes = copy(reduce(vcat, X[y])');
 
-            for _ in 1:100
-                samp = sample((1:length(y))[.!y], N, replace=false);
-                Φ_no = copy(reduce(vcat, X[samp])');
-                push!(between, compute_mmd(Φ_yes, Φ_no));
+        N = min(3*sum(y), length(y) - sum(y));
+        between = Float64[];
+        within = Float64[];
 
-                samp = sample((1:length(y))[.!y], N, replace=false);
-                Φ_no2 = copy(reduce(vcat, X[samp])');
-                push!(within, compute_mmd(Φ_no2, Φ_no));
-            end
+        for _ in 1:100
+            samp = sample((1:length(y))[.!y], N, replace=false);
+            Φ_no = copy(reduce(vcat, X[samp])');
+            push!(between, compute_mmd(Φ_yes, Φ_no));
 
-            push!(mmd_between, (mean(between), std(between)));
-            push!(mmd_within, (mean(within), std(within)));
-
-            @info "Layer $l => MMD (Between): $(mean(between)) ($(std(between)))"
-            @info "Layer $l => MMD (Within): $(mean(within)) ($(std(within)))"
+            samp = sample((1:length(y))[.!y], N, replace=false);
+            Φ_no2 = copy(reduce(vcat, X[samp])');
+            push!(within, compute_mmd(Φ_no2, Φ_no));
         end
+
+        push!(mmd_between, (mean(between), std(between), sum(y)));
+        push!(mmd_within, (mean(within), std(within), sum(y)));
+
+        @info "Layer $l => MMD (Between): $(mean(between)) ($(std(between)))"
+        @info "Layer $l => MMD (Within): $(mean(within)) ($(std(within)))"
     end
+
+    return mmd_between, mmd_within
 end
 
 
@@ -236,5 +292,4 @@ function compute_mmd(X::Array{Float64,2}, Y::Array{Float64,2})
 end
 
 
-main()
-
+# main()

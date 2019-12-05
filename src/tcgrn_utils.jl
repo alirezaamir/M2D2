@@ -5,10 +5,10 @@ using LinearAlgebra
 
 @enum Mode direct_sum tensor_prod;
 const SRATE = 256;
-const DURATION_SEC = 10
+const DURATION_SEC = 2
 const ZERO_THRESH = 1e-10;
 
-export process_subject, prepare_data, Mode
+export process_subject, prepare_data, Mode, rescale_layer!
 function process_subject(subject_id, ε)
     println("Opening data file");
     h5_file = HDF5.h5open("../input/eeg_data_temples2.h5", "r");
@@ -28,10 +28,15 @@ function process_subject(subject_id, ε)
         while length(Φ) > 1
             println("Coarse graining layer: $layer");
             max_dim = maximum([size(S.ϕ,1) for S in Φ]);
-            Φ = coarse_grain_layer(Φ, ε);
-            println(join(["Maximum dimension: $max_dim", 
-                        "Num sites: $(length(Φ))", 
-                        "Positive fraction: $(mean([S.y for S in Φ]))"], "\n"));
+            max_val = maximum([maximum(S.ϕ) for S in Φ]);
+            min_val = minimum([minimum(S.ϕ) for S in Φ]);
+            Φ = coarse_grain_layer(Φ, 1e-5);
+            println(
+                join(["Maximum dimension: $max_dim", 
+                      "Num sites: $(length(Φ))", 
+                      "Positive fraction: $(mean([S.y for S in Φ]))",
+                      "Maximum: $max_val", "Minimum: $min_val"],
+                      "\n"));
             write_layer(Φ, layer, h5_file);
             layer += 1;
         end
@@ -61,7 +66,7 @@ end
 
 
 function prepare_data(h5_node)
-    stride = 3*SRATE;
+    stride = 2*SRATE;
     seg_length = DURATION_SEC*SRATE;
 
     Φ = SiteInfo[];
@@ -83,7 +88,7 @@ function prepare_data(h5_node)
 end
 
 
-function get_scaler(h5_node)
+function get_scaler( h5_node )
     h5_file = HDF5.h5open("../temp/bounds.h5", "cw");
     subject_id = replace(HDF5.name(h5_node), "/" => "");
     if !(subject_id in names(h5_file))
@@ -119,6 +124,7 @@ function coarse_grain_layer( Φ::Array{SiteInfo,1}, eps::Float64 )
         S = SiteInfo(T, λ, P, m, Φ[ix].y | Φ[next].y);
         push!(L, S)
     end
+
     return L
 end
 
@@ -127,16 +133,13 @@ function coarse_grain_site( A::Array{Float64,2}, B::Array{Float64,2}, eps::Float
     K, N = size( A );
     M = size( B, 1 );
 
-    A /= norm(A);
-    B /= norm(B);
-    
     mode = K*M > 1024 ? direct_sum : tensor_prod
     @debug "Array size: $K x $M => Mode: $mode"
 
-    Ω = mode == direct_sum ? accum_covmat_sum(A, B) : accum_covmat_prod(A, B);
-    Ω /= norm(Ω);
-    λ, U = eigen( Symmetric(Ω) );
-    π = sortperm(λ);
+    Ω = mode == direct_sum ? accum_covmat_sum( A, B ) : accum_covmat_prod( A, B );
+    Ω /= norm( Ω );
+    λ, U = eigen( Symmetric( Ω ) );
+    π = sortperm( λ );
     U = U[:,π];
     λ = λ[π];
     if sum(λ) == 0
