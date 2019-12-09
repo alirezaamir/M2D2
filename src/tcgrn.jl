@@ -22,28 +22,30 @@ function main()
     subject_ids = HDF5.names(h5_file);
     close(h5_file)
 
-    for subject_id in subject_ids
-        ε_list = [0.5, 1e-1, 1e-2, 1e-3, 1e-4];
-        for ε in ε_list
-            TCGRN.process_subject(subject_ids[1], 1e-7);
-            features, labels = coarse_grain_data(subject_ids[1], 1e-7);
-            dirname = "../output/$subject_id/$ε"
-            if !isdir(dirname)
-                mkpath(dirname);
-            end
+    TCGRN.process_subject(subject_ids[1], 1e-7);
+    features, labels = coarse_grain_data(subject_ids[1], 1e-7);
 
-            mmd_between, mmd_within = layer_analysis_mmd(features, labels);
+    # for subject_id in subject_ids
+    #     ε_list = [0.5, 1e-1, 1e-2, 1e-3, 1e-4];
+    #     for ε in ε_list
+    #         features, labels = coarse_grain_data(subject_ids[1], 1e-7);
+    #         dirname = "../output/$subject_id/$ε";
+    #         if !isdir(dirname)
+    #             mkpath(dirname);
+    #         end
+
+    #         mmd_between, mmd_within = layer_analysis_mmd(features, labels);
             
-            open("$dirname/mmd_between.txt", "w") do fh
-                write(fh, "mmd,se,N\n");
-                for (mmd, se, N) in mmd_between write(fh, "$mmd,$se,$N\n"); end
-            end
-            open("$dirname/mmd_within.txt", "w") do fh
-                write(fh, "mm-d,se,N\n");
-                for (mmd, se, N) in mmd_within write(fh, "$mmd,$se,$N\n"); end
-            end
-        end
-    end
+    #         open("$dirname/mmd_between.txt", "w") do fh
+    #             write(fh, "mmd,se,N\n");
+    #             for (mmd, se, N) in mmd_between write(fh, "$mmd,$se,$N\n"); end
+    #         end
+    #         open("$dirname/mmd_within.txt", "w") do fh
+    #             write(fh, "mm-d,se,N\n");
+    #             for (mmd, se, N) in mmd_within write(fh, "$mmd,$se,$N\n"); end
+    #         end
+    #     end
+    # end
 end
 
 
@@ -57,8 +59,10 @@ function plot_eigenvalues(subject_id, labels, ε)
             end
 
             maxv = maximum([length(x) for x in eigs]);
+            num_eigs = zeros(length(eigs));
             λ = fill!(zeros(maxv, length(eigs)), NaN);
             for ix in 1:length(eigs)
+                num_eigs[ix] = length(eigs[ix]);
                 λ[1:length(eigs[ix]),ix] = reverse(
                     cumsum(eigs[ix]) ./ sum(eigs[ix]));
             end
@@ -67,6 +71,9 @@ function plot_eigenvalues(subject_id, labels, ε)
             nanmean(x) = mean(filter(!isnan, x));
             μ_yes = mapslices(nanmean, λ[:,y], dims=2);
             μ_no  = mapslices(nanmean, λ[:,.!y], dims=2);
+
+            p10, p25, p50, p75, p90 = quantile!(
+                num_eigs, [0.1, 0.25, 0.5, 0.75, 0.9]);
 
             which = [ix for ix in 1:length(μ_yes) if μ_yes[ix] > 1e-9];
             ticks = [10.0^-x for x in 9:-1:0];
@@ -78,6 +85,10 @@ function plot_eigenvalues(subject_id, labels, ε)
                     linewidth=3, color=:darkblue,
                     yticks=(log.(ticks), ticks),
                     ylims=(log(10^-9),0), label="Non-Seizure");
+            title!(join(["Min: $(minimum(num_eigs))",
+                         "p10: $p10", "p25: $p25",
+                         "p50: $p50", "p75: $p75",
+                         "p90: $p90", "Max: $(maximum(num_eigs))"],"\n"));
             outpath = "../output/$subject_id/$ε/layer$l"
             if !isdir(outpath)
                 mkpath(outpath)
@@ -178,10 +189,6 @@ function layer_analysis_cancor(features, labels, outdir)
 end
 
 
-function logit(features, labels)
-
-end
-
 
 function coarse_grain_data(subject_id, ε)
     h5_file = HDF5.h5open("../input/eeg_data_temples2.h5", "r");
@@ -214,7 +221,8 @@ function predict_layer(X, y, layer_node)
     y_new = Bool[];
     X_new = Array{Float64,2}[];
     ix = 1;
-    for s in 1:length(names(layer_node))
+
+    for s in 1:length(layer_node)
         next = ix == length(X) ? ix-1 : ix + 1;
         site_node = layer_node["site$s"];
         mode = TCGRN.Mode(read(site_node["mode"]));
@@ -236,6 +244,13 @@ function predict_layer(X, y, layer_node)
         ix += 2;
     end
     return X_new, y_new
+end
+
+
+function layer_analysis_gpr(features, labels)
+    for l in 1:length(features)
+        X = features[l];
+    end
 end
 
 
@@ -292,4 +307,4 @@ function compute_mmd(X::Array{Float64,2}, Y::Array{Float64,2})
 end
 
 
-# main()
+main()

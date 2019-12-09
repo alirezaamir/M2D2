@@ -66,7 +66,7 @@ end
 
 
 function prepare_data(h5_node)
-    stride = 2*SRATE;
+    stride = 3*SRATE;
     seg_length = DURATION_SEC*SRATE;
 
     Φ = SiteInfo[];
@@ -113,23 +113,51 @@ end
 
 function coarse_grain_layer( Φ::Array{SiteInfo,1}, eps::Float64 )
     features = Array{Float64,2}[];
-    y_new = Bool[];
-    L = SiteInfo[];
 
-    K,N = size(Φ[1].ϕ);
+    modes = Mode[];
+    eigenvals = Array{Float64,1}[];
+    eigenvectors = Array{Float64,2}[];
 
     for ix in 1:2:length(Φ)
         next = ix == length(Φ) ? ix-1 : ix + 1;
-        T, P, m, λ = coarse_grain_site( Φ[ix].ϕ, Φ[next].ϕ, eps );
-        S = SiteInfo(T, λ, P, m, Φ[ix].y | Φ[next].y);
-        push!(L, S)
+        U, λ, m = coarse_grain_site( Φ[ix].ϕ, Φ[next].ϕ );
+        push!(modes, m);
+        push!(eigenvals, λ);
+        push!(eigenvectors, U); 
+    end
+    
+    K = size(eigenvectors[1],2);
+    num_eigs = quantile!(K .- [get_eig_ix(λ, eps) for λ in eigenvals], 0.9);
+    r = Int(floor(K - num_eigs));
+    @info "Number of eigenvalues $num_eigs -> $r";
+    ix = 1;
+    L = SiteInfo[];
+
+    for s in 1:2:length(Φ)
+        next = s == length(Φ) ? s-1 : s + 1;
+        
+        A = Φ[s].ϕ; B = Φ[next].ϕ;
+        U = eigenvectors[ix][:,r:end];
+        P = modes[ix] == direct_sum ? project_sum(U, A, B) : project_prod(U, A, B);              
+        P[abs.(P) .< ZERO_THRESH] .= 0.0;  
+        y = Φ[s].y | Φ[next].y;
+        S = SiteInfo(U, eigenvals[ix], P, modes[ix], y);
+        
+        push!(L, S);
+        ix += 1
     end
 
     return L
 end
 
 
-function coarse_grain_site( A::Array{Float64,2}, B::Array{Float64,2}, eps::Float64 )
+function get_eig_ix(λ, ε)
+    errors = findall(x -> x > ε, cumsum( λ ) ./ sum( λ ));
+    return length(errors) > 0 ? errors[1] : length(λ);
+end
+
+
+function coarse_grain_site( A::Array{Float64,2}, B::Array{Float64,2} )
     K, N = size( A );
     M = size( B, 1 );
 
@@ -157,13 +185,7 @@ function coarse_grain_site( A::Array{Float64,2}, B::Array{Float64,2}, eps::Float
         throw(TypeError("Covariance matrix is not PSD"))
     end
 
-    errors = findall(x -> x > eps, cumsum( λ ) ./ sum( λ ));
-    ix = length(errors) > 0 ? errors[1] : length(λ);
-    U = U[:,ix:end];
-    P = mode == direct_sum ? project_sum(U, A, B) : project_prod(U, A, B);
-    P[abs.(P) .< ZERO_THRESH] .= 0.0;
-
-    return (U, P, mode, λ)
+    return (U, λ, mode)
 end
 
 
