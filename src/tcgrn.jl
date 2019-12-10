@@ -12,8 +12,8 @@ using GaussianMixtures
 using MultivariateStats
 
 
-nproc = min(10, Int(length(Sys.cpu_info()) / 8));
-addprocs(nproc, enable_threaded_blas=true);
+# nproc = min(10, Int(length(Sys.cpu_info()) / 8));
+# addprocs(nproc, enable_threaded_blas=true);
 
 @everywhere using LinearAlgebra
 
@@ -26,12 +26,10 @@ function main()
     subject_ids = HDF5.names(h5_file);
     close(h5_file)
 
-    TCGRN.process_subject(subject_ids[1], 1e-7);
-    features, labels = coarse_grain_data(subject_ids[1], 1e-7);
-
     for subject_id in subject_ids
         ε_list = [1e-3, 1e-5, 1e-7];
         for ε in ε_list
+            TCGRN.process_subject(subject_id, ε);
             features, labels = coarse_grain_data(subject_id, ε);
             dirname = "../output/$subject_id/$ε";
             if !isdir(dirname)
