@@ -1,10 +1,14 @@
+using DSP
 using HDF5
 using Plots
 using Random
 using MLKernels
 using StatsBase
 using Statistics
+using Clustering
 using Distributed
+using KernelDensity
+using GaussianMixtures
 using MultivariateStats
 
 
@@ -25,31 +29,22 @@ function main()
     TCGRN.process_subject(subject_ids[1], 1e-7);
     features, labels = coarse_grain_data(subject_ids[1], 1e-7);
 
-    # for subject_id in subject_ids
-    #     ε_list = [0.5, 1e-1, 1e-2, 1e-3, 1e-4];
-    #     for ε in ε_list
-    #         features, labels = coarse_grain_data(subject_ids[1], 1e-7);
-    #         dirname = "../output/$subject_id/$ε";
-    #         if !isdir(dirname)
-    #             mkpath(dirname);
-    #         end
-
-    #         mmd_between, mmd_within = layer_analysis_mmd(features, labels);
-            
-    #         open("$dirname/mmd_between.txt", "w") do fh
-    #             write(fh, "mmd,se,N\n");
-    #             for (mmd, se, N) in mmd_between write(fh, "$mmd,$se,$N\n"); end
-    #         end
-    #         open("$dirname/mmd_within.txt", "w") do fh
-    #             write(fh, "mm-d,se,N\n");
-    #             for (mmd, se, N) in mmd_within write(fh, "$mmd,$se,$N\n"); end
-    #         end
-    #     end
-    # end
+    for subject_id in subject_ids
+        ε_list = [1e-3, 1e-5, 1e-7];
+        for ε in ε_list
+            features, labels = coarse_grain_data(subject_id, ε);
+            dirname = "../output/$subject_id/$ε";
+            if !isdir(dirname)
+                mkpath(dirname);
+            end
+            plot_eigenvalues(subject_id, labels, dirname);
+            layer_analysis_gmm(features, labels, dirname);
+        end
+    end
 end
 
 
-function plot_eigenvalues(subject_id, labels, ε)
+function plot_eigenvalues(subject_id, labels, dirname)
     HDF5.h5open("../temp/$ε/decomp_$(subject_id).h5") do h5_file
         for l in 1:length(labels)
             layer_node = h5_file["layer$l"];
@@ -72,9 +67,6 @@ function plot_eigenvalues(subject_id, labels, ε)
             μ_yes = mapslices(nanmean, λ[:,y], dims=2);
             μ_no  = mapslices(nanmean, λ[:,.!y], dims=2);
 
-            p10, p25, p50, p75, p90 = quantile!(
-                num_eigs, [0.1, 0.25, 0.5, 0.75, 0.9]);
-
             which = [ix for ix in 1:length(μ_yes) if μ_yes[ix] > 1e-9];
             ticks = [10.0^-x for x in 9:-1:0];
             plot(which, log.(vec(μ_yes[which])), 
@@ -85,15 +77,7 @@ function plot_eigenvalues(subject_id, labels, ε)
                     linewidth=3, color=:darkblue,
                     yticks=(log.(ticks), ticks),
                     ylims=(log(10^-9),0), label="Non-Seizure");
-            title!(join(["Min: $(minimum(num_eigs))",
-                         "p10: $p10", "p25: $p25",
-                         "p50: $p50", "p75: $p75",
-                         "p90: $p90", "Max: $(maximum(num_eigs))"],"\n"));
-            outpath = "../output/$subject_id/$ε/layer$l"
-            if !isdir(outpath)
-                mkpath(outpath)
-            end
-            savefig("$outpath/eigenvals.png");
+            savefig("$dirname/eigenvals.png");
         end
     end
 end
@@ -247,9 +231,69 @@ function predict_layer(X, y, layer_node)
 end
 
 
-function layer_analysis_gpr(features, labels)
+function layer_analysis_km(features, labels)
+    num_centers = [2, 4, 8, 16, 32, 64];
     for l in 1:length(features)
-        X = features[l];
+        y = [Bool(x) for x in labels[l]];
+        X = reduce(hcat, features[l][.!y]);
+
+        costs = Float64[];
+        for nc in num_centers
+            @info "Number of centroids: $nc"
+            km = kmeans(X, nc);
+            a = assignments(km);
+            counts = count_unique(assignments(km));
+            @info "Cost: $(km.totalcost)"
+            push!(costs, km.totalcost);
+        end
+    end
+end
+
+
+function count_unique( x )
+    vals = sort(unique( x ));
+    counts = Float64[];
+    for v in vals
+        q = mean(x .== v);
+        @info "$v => $q"
+        push!(counts, q)
+    end
+    return counts
+end
+
+
+function layer_analysis_gmm(features, labels, dirname)
+    for l in 1:7
+        y = [Bool(x) for x in labels[l]];
+        X = copy(reduce(hcat, features[l][.!y])');
+
+        gm = GMM(16, X);
+        ll_no = vec(maximum(llpg(gm, X), dims=2));
+        dist_no = kde(ll_no);
+
+        X_yes = copy(reduce(hcat, features[l][y])');
+        ll_yes = vec(maximum(llpg(gm, X_yes), dims=2));
+        dist_yes = kde(ll_yes);
+        
+        plot(dist_no.x, dist_no.density, 
+                color="darkgreen", linewidth=3, label="Non-Seizure");
+        plot!(dist_yes.x, dist_yes.density,
+                color="darkblue", linewidth=3, label="Sizure");
+        savefig("$dirname/layer$l/log_like_dists.png"); closeall();
+
+        wsize = size(features[l][1], 2);
+        llmean(x) = mean(maximum(llpg(gm, copy(x')), dims=2));
+        ll_no_smooth = [llmean(x) for x in features[l][.!y]];
+        scatter(wsize.*(1:length(ll_no_smooth)), ll_no_smooth, 
+            color="green", label="", alpha=0.1);
+
+        ll_yes_smooth = [llmean(x) for x in features[l][y]];
+        scatter!(wsize.*(1:length(y))[y], ll_yes_smooth,
+            color="cyan", label="", alpha=0.4);
+
+        thresh = quantile(ll_no, 0.05);
+        hline!([thresh], color="red", linewidth=3, label="");
+        savefig("$dirname/layer$l/log_like_history.png"); closeall();
     end
 end
 
@@ -305,6 +349,3 @@ function compute_mmd(X::Array{Float64,2}, Y::Array{Float64,2})
           (2.0/(M*N))*fetch(Kxy);
     return mmd 
 end
-
-
-main()
