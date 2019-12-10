@@ -35,14 +35,14 @@ function main()
             if !isdir(dirname)
                 mkpath(dirname);
             end
-            plot_eigenvalues(subject_id, labels, dirname);
+            plot_eigenvalues(subject_id, labels, dirname, ε);
             layer_analysis_gmm(features, labels, dirname);
         end
     end
 end
 
 
-function plot_eigenvalues(subject_id, labels, dirname)
+function plot_eigenvalues(subject_id, labels, dirname, ε)
     HDF5.h5open("../temp/$ε/decomp_$(subject_id).h5") do h5_file
         for l in 1:length(labels)
             layer_node = h5_file["layer$l"];
