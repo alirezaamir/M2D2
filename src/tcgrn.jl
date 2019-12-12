@@ -26,16 +26,19 @@ function main()
     subject_ids = HDF5.names(h5_file);
     close(h5_file)
 
+    TCGRN.process_subject(subject_ids[1], 1e-7);
+    features, labels = coarse_grain_data(subject_ids[1], 1e-7);    
+
     for subject_id in subject_ids
-        ε_list = [1e-3, 1e-5, 1e-7];
+        ε_list = [1e-7];
         for ε in ε_list
-            TCGRN.process_subject(subject_id, ε);
+            # TCGRN.process_subject(subject_id, ε);
             features, labels = coarse_grain_data(subject_id, ε);
             dirname = "../output/$subject_id/$ε";
             if !isdir(dirname)
                 mkpath(dirname);
             end
-            plot_eigenvalues(subject_id, labels, dirname, ε);
+            # plot_eigenvalues(subject_id, labels, dirname, ε);
             layer_analysis_gmm(features, labels, dirname);
         end
     end
@@ -229,39 +232,8 @@ function predict_layer(X, y, layer_node)
 end
 
 
-function layer_analysis_km(features, labels)
-    num_centers = [2, 4, 8, 16, 32, 64];
-    for l in 1:length(features)
-        y = [Bool(x) for x in labels[l]];
-        X = reduce(hcat, features[l][.!y]);
-
-        costs = Float64[];
-        for nc in num_centers
-            @info "Number of centroids: $nc"
-            km = kmeans(X, nc);
-            a = assignments(km);
-            counts = count_unique(assignments(km));
-            @info "Cost: $(km.totalcost)"
-            push!(costs, km.totalcost);
-        end
-    end
-end
-
-
-function count_unique( x )
-    vals = sort(unique( x ));
-    counts = Float64[];
-    for v in vals
-        q = mean(x .== v);
-        @info "$v => $q"
-        push!(counts, q)
-    end
-    return counts
-end
-
-
 function layer_analysis_gmm(features, labels, dirname)
-    for l in 1:7
+    for l in 1:5
         y = [Bool(x) for x in labels[l]];
         X = copy(reduce(hcat, features[l][.!y])');
 
