@@ -13,7 +13,7 @@ using MultivariateStats
 
 
 # nproc = min(10, Int(length(Sys.cpu_info()) / 8));
-# addprocs(nproc, enable_threaded_blas=true);
+# addprocs(3, enable_threaded_blas=true);
 
 @everywhere using LinearAlgebra
 
@@ -26,18 +26,17 @@ function main()
     subject_ids = HDF5.names(h5_file);
     close(h5_file)
 
+    ε = 1e-7;
     for subject_id in subject_ids
-        ε_list = [1e-3, 1e-5, 1e-7];
-        for ε in ε_list
-            TCGRN.process_subject(subject_id, ε);
-            features, labels = coarse_grain_data(subject_id, ε);
-            dirname = "../output/$subject_id/$ε";
-            if !isdir(dirname)
-                mkpath(dirname);
-            end
-            plot_eigenvalues(subject_id, labels, dirname, ε);
-            layer_analysis_gmm(features, labels, dirname);
-        end
+        TCGRN.process_subject(subject_id, ε);
+        #features, labels = coarse_grain_data(subject_id, ε);
+        #dirname = "../output/$subject_id/$ε";
+        #if !isdir(dirname)
+        #    mkpath(dirname);
+        #end
+            
+        #@info "GMM estimation"
+        #layer_analysis_gmm(features, labels, dirname);
     end
 end
 
@@ -45,6 +44,7 @@ end
 function plot_eigenvalues(subject_id, labels, dirname, ε)
     HDF5.h5open("../temp/$ε/decomp_$(subject_id).h5") do h5_file
         for l in 1:length(labels)
+            @info "Plotting eigenvalues for layer $l"
             layer_node = h5_file["layer$l"];
             eigs = Array{Float32,1}[];
             for site_node in layer_node
@@ -261,7 +261,8 @@ end
 
 
 function layer_analysis_gmm(features, labels, dirname)
-    for l in 1:7
+    for l in 1:5
+        @info "GMM for layer: $l"
         y = [Bool(x) for x in labels[l]];
         X = copy(reduce(hcat, features[l][.!y])');
 
@@ -277,6 +278,10 @@ function layer_analysis_gmm(features, labels, dirname)
                 color="darkgreen", linewidth=3, label="Non-Seizure");
         plot!(dist_yes.x, dist_yes.density,
                 color="darkblue", linewidth=3, label="Sizure");
+        
+        if !isdir("$dirname/layer$l")
+            mkpath("$dirname/layer$l");
+        end
         savefig("$dirname/layer$l/log_like_dists.png"); closeall();
 
         wsize = size(features[l][1], 2);
