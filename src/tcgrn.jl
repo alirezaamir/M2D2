@@ -40,7 +40,7 @@ function main()
             if !isdir(dirname)
                 mkpath(dirname);
             end
-            layer_analysis_gmm(features, labels, dirname);
+            layer_analysis_gmm(features, labels, subject_id, dirname);
         end
     end
 end
