@@ -8,7 +8,9 @@ using Statistics
 using Clustering
 using Distributed
 using KernelDensity
+using Interpolations
 using GaussianMixtures
+using GaussianProcesses
 using MultivariateStats
 
 
@@ -38,7 +40,6 @@ function main()
             if !isdir(dirname)
                 mkpath(dirname);
             end
-            # plot_eigenvalues(subject_id, labels, dirname, ε);
             layer_analysis_gmm(features, labels, dirname);
         end
     end
@@ -82,97 +83,6 @@ function plot_eigenvalues(subject_id, labels, dirname, ε)
         end
     end
 end
-
-
-function layer_analysis_cancor(features, labels, outdir)
-    X_max = features[end][1];
-    corrs = Array{Array{Float64,1},1}[];
-    used_labels = Array{Bool,1}[];
-    for l in 1:min(5, length(features))
-        @info "Layer $l/$(length(features))"
-        layer_corr = Array{Float64,1}[];
-
-        for s in 1:length(features[l])
-            X_l = features[l][s];
-            @time C = fit(CCA, X_max, X_l);
-            push!(layer_corr, correlations(C));
-        end
-        push!(corrs, layer_corr);
-    end
-
-    for l in 1:5
-        dim = maximum([length(x) for x in corrs[l]]);
-        M = zeros(dim, length(corrs[l]));
-        avg_corr = zeros(length(corrs[l]));
-        max_corr = zeros(length(corrs[l]));
-        min_corr = zeros(length(corrs[l]));
-        for ix in 1:length(corrs[l])
-            M[1:length(corrs[l][ix]),ix] = corrs[l][ix];
-            avg_corr[ix] = mean(corrs[l][ix]);
-            max_corr[ix] = maximum(corrs[l][ix]);
-            min_corr[ix] = minimum(corrs[l][ix]);
-        end
-        
-        inds = [Bool(x) for x in labels[l]];
-        μ_yes = mean(M[:,inds], dims=2);
-        σ_yes = std(M[:,inds], dims=2);
-        μ_no = mean(M[:,.!inds], dims=2);
-        σ_no = std(M[:,.!inds], dims=2);
-
-        inds = μ_yes .> 0.70;
-        μ_yes = μ_yes[inds];
-        σ_yes = σ_yes[inds];
-
-        inds = μ_no .> 0.70;
-        μ_no = μ_no[inds];
-        σ_no = σ_no[inds];
-
-        plot(1:length(μ_yes), μ_yes, 
-             linewidth=2, 
-             yerror=σ_yes, 
-             color="darkgreen",
-             label="Seizure");
-        plot!(1:length(μ_no), μ_no,
-              linewidth=2,
-              yerror=σ_no,
-              color="darkblue",
-              label="Non-Seizure");
-        xlabel!("Canonical Correlate");
-        ylabel!("Correlation");
-        title!("Resolution (Seconds): $((2^l)*10)");
-
-        outpath = "$outdir/layer$l"
-        if !isdir(outpath)
-            mkpath(outpath)
-        end
-        savefig("$outpath/correlates.png"); closeall();
-
-        plot(1:3:length(avg_corr), avg_corr[1:3:length(avg_corr)], 
-             linewidth=2, color="darkgreen", label="Mean");
-        plot!(1:3:length(avg_corr), min_corr[1:3:length(avg_corr)], 
-             linewidth=2, color="darkblue", label="Min");
-        plot!(1:3:length(avg_corr), max_corr[1:3:length(avg_corr)], 
-             linewidth=2, color="orange", label="Max");
-
-        ix = 1;
-        start = -1;
-        flag = false;
-        y = labels[l] .> 0;
-        while ix < length(y)
-            if y[ix] & (start < 0)
-                start = ix;
-            end
-            if !y[ix] & (start > 0)
-                @info "Seizure from: $start -> $ix"
-                vspan!([start, ix], color="red", label="");
-                start = -1;
-            end
-            ix += 1;
-        end
-        savefig("$outpath/ts_corr.png"); closeall();
-    end
-end
-
 
 
 function coarse_grain_data(subject_id, ε)
@@ -232,7 +142,23 @@ function predict_layer(X, y, layer_node)
 end
 
 
-function layer_analysis_gmm(features, labels, dirname)
+function layer_analysis_gmm(features, labels, subject_id, dirname)
+    stride = 3*SRATE;
+    seg_length = DURATION_SEC*SRATE;
+    time = Int64[];
+    push!(time, 0);
+    HDF5.h5open("../input/eeg_data_temples2.h5") do h5_file
+        node = h5_file["$subject_id"];
+        for grp in node
+            t = Int.(
+                round.(
+                    collect(seg_length+1:seg_length:size(grp,2)) / SRATE)
+                ) .+ time[end];
+            for x in t push!(time, x); end
+        end
+    end
+    time = time[2:end];
+    
     for l in 1:5
         y = [Bool(x) for x in labels[l]];
         X = copy(reduce(hcat, features[l][.!y])');
@@ -254,68 +180,33 @@ function layer_analysis_gmm(features, labels, dirname)
         wsize = size(features[l][1], 2);
         llmean(x) = mean(maximum(llpg(gm, copy(x')), dims=2));
         ll_no_smooth = [llmean(x) for x in features[l][.!y]];
-        scatter(wsize.*(1:length(ll_no_smooth)), ll_no_smooth, 
-            color="green", label="", alpha=0.1);
+        thresh = quantile(ll_no, 0.001);
+        xpoints = (1:length(y))[.!y];
+        
+        valid = ll_no_smooth .>= thresh;
+        ll_no_smooth = ll_no_smooth[valid];
+        xpoints = xpoints[valid];
+        ixs = Int.(round.(range(1,length(ll_no_smooth), length=20)));
+        markers = map(x -> "$x", ixs);
+
+        scatter(xpoints, ll_no_smooth, 
+            color="green", label="", alpha=0.1,
+            xticks=(ixs, markers), xrotation=45,
+            xlabel="Time (Seconds)", ylabel="Log-Likelihood");
 
         ll_yes_smooth = [llmean(x) for x in features[l][y]];
-        scatter!(wsize.*(1:length(y))[y], ll_yes_smooth,
+        scatter!((1:length(y))[y], ll_yes_smooth,
             color="cyan", label="", alpha=0.4);
 
         thresh = quantile(ll_no, 0.05);
         hline!([thresh], color="red", linewidth=3, label="");
         savefig("$dirname/layer$l/log_like_history.png"); closeall();
-    end
-end
 
-
-function layer_analysis_mmd(features, labels)
-    mmd_between = Tuple{Float64,Float64,Int64}[];
-    mmd_within = Tuple{Float64,Float64,Int64}[];
-    for l in 1:min(5, length(features))
-        @info "Layer $l"
-        X = features[l];
-        y = map(x -> x > 0, labels[l]);
-
-        if length(y) == sum(y)
-            continue
-        end 
-
-        Φ_yes = copy(reduce(vcat, X[y])');
-
-        N = min(3*sum(y), length(y) - sum(y));
-        between = Float64[];
-        within = Float64[];
-
-        for _ in 1:100
-            samp = sample((1:length(y))[.!y], N, replace=false);
-            Φ_no = copy(reduce(vcat, X[samp])');
-            push!(between, compute_mmd(Φ_yes, Φ_no));
-
-            samp = sample((1:length(y))[.!y], N, replace=false);
-            Φ_no2 = copy(reduce(vcat, X[samp])');
-            push!(within, compute_mmd(Φ_no2, Φ_no));
+        time_new = Int64[];
+        for s in 1:2:length(y)
+            next = s == length(y) ? s-1 : s + 1;
+            push!(time_new, time[next]);
         end
-
-        push!(mmd_between, (mean(between), std(between), sum(y)));
-        push!(mmd_within, (mean(within), std(within), sum(y)));
-
-        @info "Layer $l => MMD (Between): $(mean(between)) ($(std(between)))"
-        @info "Layer $l => MMD (Within): $(mean(within)) ($(std(within)))"
+        time = time_new;
     end
-
-    return mmd_between, mmd_within
-end
-
-
-function compute_mmd(X::Array{Float64,2}, Y::Array{Float64,2})
-    Kxx = sum(kernelmatrix(Val(:col), SquaredExponentialKernel(), X));
-    Kyy = sum(kernelmatrix(Val(:col), SquaredExponentialKernel(), Y));
-    Kxy = sum(kernelmatrix(Val(:col), SquaredExponentialKernel(), X, Y));
-
-    N = size(X,2);
-    M = size(Y,2);
-    mmd = (1.0/(N*N))*fetch(Kxx) + 
-          (1.0/(M*M))*fetch(Kyy) -
-          (2.0/(M*N))*fetch(Kxy);
-    return mmd 
 end

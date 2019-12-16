@@ -8,7 +8,7 @@ const SRATE = 256;
 const DURATION_SEC = 2
 const ZERO_THRESH = 1e-10;
 
-export process_subject, prepare_data, Mode, rescale_layer!
+export process_subject, prepare_data, Mode, DURATION_SEC, SRATE
 function process_subject(subject_id, ε)
     println("Opening data file");
     h5_file = HDF5.h5open("../input/eeg_data_temples2.h5", "r");
@@ -70,7 +70,6 @@ function prepare_data(h5_node)
     seg_length = DURATION_SEC*SRATE;
 
     Φ = SiteInfo[];
-
     minv, maxv = get_scaler(h5_node);
     for obj in h5_node
         data = read(obj);
