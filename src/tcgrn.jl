@@ -2,6 +2,7 @@ using DSP
 using HDF5
 using Plots
 using Random
+using Measures
 using MLKernels
 using StatsBase
 using Statistics
@@ -28,7 +29,7 @@ function main()
 
 #    TCGRN.process_subject(subject_ids[1], 1e-7);
 #    features, labels = coarse_grain_data(subject_ids[1], 1e-7);    
-
+    subject_ids = ["chb09"];
     for subject_id in subject_ids
         ε_list = [1e-7];
         for ε in ε_list
@@ -189,7 +190,7 @@ function layer_analysis_gmm(features, labels, subject_id, dirname)
 
         scatter(xpoints, ll_no_smooth, 
             color="green", label="", alpha=0.1,
-            xticks=(ixs, markers), xrotation=45,
+            xticks=(ixs, markers), xrotation=45, margin=5mm,
             xlabel="Time (Seconds)", ylabel="Log-Likelihood");
 
         ll_yes_smooth = [llmean(x) for x in features[l][y]];
