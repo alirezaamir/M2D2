@@ -4,6 +4,7 @@ using Plots
 using Random
 using MLKernels
 using StatsBase
+using DataFrames
 using Statistics
 using Clustering
 using Distributed
@@ -210,3 +211,124 @@ function layer_analysis_gmm(features, labels, subject_id, dirname)
         time = time_new;
     end
 end
+
+
+function layer_analysis_gauss(features, labels)
+    for l in 3:5
+        y = [Bool(x) for x in labels[l]];
+
+        val = findfirst(x -> x > 0, y);
+        divergences = zeros(val, val);
+        means, covmats = compute_gauss_dists(features[l][1:val]);
+        off_diag_covar = [sum(diag(Σ)) / sum(Σ) for Σ in covmats];
+        stats = describe(off_diag_covar);
+
+        K = size(features[l][1],1);
+        for i in 1:val
+            for j in (i+1):val
+                @info "KL => $i,$j"
+                @inbounds Σ₁, Σ₂ = diag(covmats[i]), diag(covmats[j]);
+                @inbounds μ₁, μ₂ = means[i], means[j];
+                @time wass = compute_wasserstein_diag(μ₁, μ₂, Σ₁, Σ₂);
+                divergences[i,j] = wass;
+            end
+        end
+        
+        # Some spectral clustering to see if we can merge some distributions...
+        Δ = convert( Array{Float64,2}, Symmetric( divergences ) ) .^ -1;
+        Δ[ Δ .== Inf ] .= 0.0;
+        W = zeros( size( Δ ) );
+        W[ diagind(W) ] = sum( Δ, dims=2 );
+
+        λ, U = eigen( W .- Δ, W );
+        U = U[:,end-64:end];
+        km = kmeans( U', 64 );
+
+        # Now assemble a database of samples to use for analyzing MMD
+        dictionary = Array{Float64,2}[];
+        for c in unique(km.assignments)
+            X = reduce(hcat, features[l][1:val][ km.assignments .== c ]);
+            N = min(5000, size(X,2));
+            X = X[:,shuffle(1:size(X,2))[1:N]];
+            push!(dictionary, X);
+        end
+
+        mmd_vals = Array{Float64,1}[];
+        for X in features[l]
+            @time mmd = [compute_mmd(V, X) for V in dictionary];
+            push!(mmd_vals, mmd);
+        end
+
+    end
+end
+
+
+function compute_kldiv(μ₁, μ₂, Σ₁, Σ₂, K)
+    Σ₂_inv = inv( Σ₂ );
+    kl = 0.5*(tr(Σ₂_inv*Σ₁) + 
+           ((μ₂ .- μ₁)'*Σ₂_inv*(μ₂ .- μ₁))[1] - K + logdet(Σ₂) - logdet(Σ₁));
+    return kl
+end
+
+
+function compute_kldiv_diag(μ₁, μ₂, Σ₁, Σ₂, K)
+    Σ₂_inv = Σ₂.^-1;
+    μ_diff = μ₁ .- μ₂;
+    kl = 0.5*(sum(Σ₂_inv .* Σ₁) + 
+              ((μ_diff'.*Σ₂_inv)*μ_diff)[1] - K + 
+              log(prod(Σ₂)) - log(prod(Σ₁)))
+    return kl
+end
+
+
+function compute_wasserstein_diag(μ₁, μ₂, Σ₁, Σ₂)
+    wass = norm(μ₁ - μ₂)^2 + sum(Σ₁ .+ Σ₂ - 2*sqrt.(sqrt.(Σ₂) .* Σ₁ .* sqrt.(Σ₂)))
+    return wass
+end
+
+
+function compute_gauss_dists(features)
+    N = size(features[1],2);
+    means = Array{Float64,2}[];
+    covmats = Array{Float64,2}[];
+    for X in features
+        Σ = (1/N)*(X*X');
+        μ = mean(X, dims=2);
+        push!(means, μ);
+        push!(covmats, Σ);
+    end
+    return means, covmats
+end
+
+
+function compute_mmd(X, Y)
+    Kxx = sum(kernelmatrix(Val(:col), SquaredExponentialKernel(), X, X));
+    Kxy = sum(kernelmatrix(Val(:col), SquaredExponentialKernel(), X, Y));
+    Kyy = sum(kernelmatrix(Val(:col), SquaredExponentialKernel(), Y, Y));
+
+    N = size(X,2);
+    M = size(Y,2);
+
+    return (1/(N^2))*Kxx + ((1/(M^2)))*Kyy - (2/(M*N))*Kxy; 
+end
+
+
+function compute_linear_mmd(X, Y)
+    mmd = 0.0
+    N = min(size(X,2), size(Y,2));
+    ixx = shuffle(1:size(X,2))[1:N];
+    ixy = shuffle(1:size(Y,2))[1:N];
+    for ix in 1:N
+        mmd += gauss_kern(vec( X[:,ixx[ix]] ), vec( Y[:,ixy[ix]] ), 1.0, 1.0);
+    end
+
+    mmd *= (1/N)
+    return mmd
+end
+
+function gauss_kern(x::Array{Float64,1}, 
+                    y::Array{Float64,1}, 
+                    σ::Float64, l::Float64)::Float64
+    return (σ^2)*exp(-(norm(x .- y)^2) / (2*(l^2)))
+end
+
