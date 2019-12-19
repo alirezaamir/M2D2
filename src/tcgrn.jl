@@ -8,9 +8,7 @@ using Statistics
 using Clustering
 using Distributed
 using KernelDensity
-using Interpolations
 using GaussianMixtures
-using GaussianProcesses
 using MultivariateStats
 
 
@@ -28,8 +26,8 @@ function main()
     subject_ids = HDF5.names(h5_file);
     close(h5_file)
 
-    TCGRN.process_subject(subject_ids[1], 1e-7);
-    features, labels = coarse_grain_data(subject_ids[1], 1e-7);    
+#    TCGRN.process_subject(subject_ids[1], 1e-7);
+#    features, labels = coarse_grain_data(subject_ids[1], 1e-7);    
 
     for subject_id in subject_ids
         ε_list = [1e-7];
