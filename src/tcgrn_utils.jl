@@ -76,11 +76,11 @@ function prepare_data(h5_node)
         data = read(obj);
         X = data[1:2,:];
         f = digitalfilter(Lowpass(50.0, fs=SRATE), Butterworth(3));
-        X = filt(f, X');
+        X = filt(f, X')';
         for k in seg_length+1:seg_length:size(data,2)
             y = any(x -> x > 0, data[3,k-seg_length:k-1]);
             ϕ = ones(4, seg_length);
-            ϕ[2:3,:] = (X[k-seg_length:k-1,:] .- minv) ./ (maxv - minv);
+            ϕ[2:3,:] = (X[:,k-seg_length:k-1] .- minv) ./ (maxv - minv);
             ϕ[4,:] = ϕ[2,:] .* ϕ[3,:];
             S = SiteInfo(zeros(2,2), zeros(2), ϕ, direct_sum, y);
             push!(Φ, S);
