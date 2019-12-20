@@ -191,7 +191,7 @@ function layer_analysis_gmm(features, labels, subject_id, dirname)
 
         scatter(xpoints, ll_no_smooth, 
             color="green", label="", alpha=0.1,
-            xticks=(ixs, markers), xrotation=45, margin=5mm,
+            xticks=(ixs, markers), xrotation=45, margin=8mm,
             xlabel="Time (Seconds)", ylabel="Log-Likelihood");
 
         ll_yes_smooth = [llmean(x) for x in features[l][y]];
@@ -212,11 +212,30 @@ function layer_analysis_gmm(features, labels, subject_id, dirname)
 end
 
 
+function layer_analysis_kde(features, labels)
+    for l in 3:5
+        y = [Bool(x) for x in labels[l]];
+        X_no = reduce(hcat, features[l][.!y]);
+        π = [InterpKDE(kde_lscv(X_no[ix,:])) for ix in 1:size(X_no,1)];
+
+    end
+end
+
+
+function product_kde(Q, π)
+    ll = zeros(size(Q,2));
+    for ix in 1:size(Q,1)
+        ll += pdf()
+    end
+end
+
+
 function layer_analysis_gauss(features, labels)
     for l in 3:5
         y = [Bool(x) for x in labels[l]];
 
-        val = findfirst(x -> x > 0, y);
+        # val = findfirst(x -> x > 0, y);
+        val = length(y);
         divergences = zeros(val, val);
         means, covmats = compute_gauss_dists(features[l][1:val]);
         off_diag_covar = [sum(diag(Σ)) / sum(Σ) for Σ in covmats];
@@ -225,7 +244,7 @@ function layer_analysis_gauss(features, labels)
         K = size(features[l][1],1);
         for i in 1:val
             for j in (i+1):val
-                @info "KL => $i,$j"
+                @info "DIV => $i,$j"
                 @inbounds Σ₁, Σ₂ = diag(covmats[i]), diag(covmats[j]);
                 @inbounds μ₁, μ₂ = means[i], means[j];
                 @time wass = compute_wasserstein_diag(μ₁, μ₂, Σ₁, Σ₂);
@@ -252,8 +271,11 @@ function layer_analysis_gauss(features, labels)
             push!(dictionary, X);
         end
 
+        X = reduce(hcat, features[l][y][3:5]);
+        push!(dictionary, X);
+
         mmd_vals = Array{Float64,1}[];
-        for X in features[l]
+        for X in features[l][y]
             @time mmd = [compute_mmd(V, X) for V in dictionary];
             push!(mmd_vals, mmd);
         end
