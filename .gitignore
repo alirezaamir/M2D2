@@ -3,5 +3,6 @@ temp
 *.o
 *.h5
 *.npy
+*.npz
 .vscode
 lsqr_example
