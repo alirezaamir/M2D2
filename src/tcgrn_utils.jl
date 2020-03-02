@@ -1,6 +1,7 @@
 module TCGRN
 using DSP
 using HDF5
+using Plots
 using Statistics
 using LinearAlgebra
 
@@ -10,28 +11,26 @@ const DURATION_SEC = 2
 const ZERO_THRESH = 1e-10;
 
 export process_subject, prepare_data, Mode, DURATION_SEC, SRATE
-function process_subject(subject_id, ε)
-    println("Opening data file");
+function process_subject(subject_id, eps)
     h5_file = HDF5.h5open("../input/eeg_data_temples2.h5", "r");
     h5_node = h5_file[subject_id];
-    println("Preparing data for subject $subject_id");
     Φ = prepare_data(h5_node);
     close(h5_file);
 
     println("Positive fraction: $(mean([S.y for S in Φ]))")
 
     layer = 1;
-    if !isdir("../temp/$(ε)")
-        mkpath("../temp/$(ε)");
+    if !isdir("../temp/$(eps)")
+        mkpath("../temp/$(eps)");
     end
     
-    HDF5.h5open("../temp/$(ε)/decomp_$subject_id.h5", "w") do h5_file
+    HDF5.h5open("../temp/$(eps)/decomp_$subject_id.h5", "w") do h5_file
         while length(Φ) > 1
             println("Coarse graining layer: $layer");
             max_dim = maximum([size(S.ϕ,1) for S in Φ]);
             max_val = maximum([maximum(S.ϕ) for S in Φ]);
             min_val = minimum([minimum(S.ϕ) for S in Φ]);
-            Φ = coarse_grain_layer(Φ, 1e-5);
+            Φ = coarse_grain_layer(Φ, eps, layer);
             println(
                 join(["Maximum dimension: $max_dim", 
                       "Num sites: $(length(Φ))", 
@@ -114,7 +113,7 @@ function get_scaler( h5_node )
 end
 
 
-function coarse_grain_layer( Φ::Array{SiteInfo,1}, eps::Float64 )
+function coarse_grain_layer( Φ::Array{SiteInfo,1}, eps::Float64, layer::Int )
     features = Array{Float64,2}[];
 
     modes = Mode[];
