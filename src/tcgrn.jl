@@ -29,10 +29,10 @@ function main()
     for subject_id in subject_ids
         ε_list = [1e-5];
         for ε in ε_list
-            TCGRN.process_subject(subject_id, ε);
+            # TCGRN.process_subject(subject_id, ε);
             dirname = "../output/$subject_id/$ε";
-            # features, labels = coarse_grain_data(subject_id, ε, dirname);
-            # predict_kde(features, labels, subject_id, dirname);
+            features, labels = coarse_grain_data(subject_id, ε, dirname);
+            predict_kde(features, labels, subject_id, dirname);
         end
     end
 end
@@ -94,13 +94,12 @@ function compare_subspaces( eigenvectors::Array{Array{Float64,2},1},
     Q = zeros( 2, N );
     for ix in 4:1:(N-3)
         P = zeros( 6 );
-        L = loadings( eigenvectors[ix], eigenvals[ix] );
+        L = eigenvectors[ix];
         vv = 1;
         for jj in ix-3:1:ix+3
             if jj != ix
-                M = loadings( eigenvectors[jj], eigenvals[jj] );
-                λ = eigvals( L*(M'*M)*L' );
-                P[vv] = sum( λ );
+                M = eigenvectors[jj];
+                P[vv] = norm( L*L' - M*M' );
                 vv += 1;
             end
         end
@@ -112,16 +111,6 @@ function compare_subspaces( eigenvectors::Array{Array{Float64,2},1},
 
     plot(Q[2,:], ylims=(0,2), ribbon=1.96*Q[1,:], fillalpha=0.3, color="blue");
     savefig("$dirname/subspace_similarity.png");
-end
-
-
-function loadings( U, λ )
-    V = zeros( size( U ) );
-    λ = sqrt.(λ[end-size(U,2)+1:end]);
-    for ix in 1:size(U,2)
-        V[:,ix] = U[:,ix]*λ[ix];
-    end
-    return V
 end
 
 
