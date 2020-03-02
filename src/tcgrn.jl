@@ -29,10 +29,10 @@ function main()
     for subject_id in subject_ids
         ε_list = [1e-5];
         for ε in ε_list
-            # TCGRN.process_subject(subject_id, ε);
+            TCGRN.process_subject(subject_id, ε);
             dirname = "../output/$subject_id/$ε";
-            features, labels = coarse_grain_data(subject_id, ε, dirname);
-            predict_kde(features, labels, subject_id, dirname);
+            # features, labels = coarse_grain_data(subject_id, ε, dirname);
+            # predict_kde(features, labels, subject_id, dirname);
         end
     end
 end
