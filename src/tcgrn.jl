@@ -55,8 +55,7 @@ function coarse_grain_data(subject_id, ε, dirname)
         for l in 1:num_layers
             @info "Coarse graining layer: $l"
             layer_node = h5_file["layer$l"];
-            X, y = predict_layer(X, y, layer_node);
-            compare_projections( X, "$dirname/layer$l" );
+            X, y = predict_layer(X, y, layer_node, "$dirname/layer$l");
             push!(features, X);
             push!(labels, y);
         end
@@ -66,30 +65,7 @@ function coarse_grain_data(subject_id, ε, dirname)
 end
 
 
-function compare_projections( X, dirname )
-    N = length( X );
-    Q = zeros( 2, N );
-    for ix in 4:1:(N-3)
-        P = zeros( 6 );
-        L = X[ix];
-        vv = 1;
-        for jj in ix-3:1:ix+3
-            if jj != ix
-                M = X[jj];
-                P[vv] = 2*norm(L - M) / (norm( L ) + norm( M ));
-            end
-        end
-        Q[1,ix] = sqrt( var( P ) );
-        Q[2,ix] = mean( P );
-    end
-    Q = Q[:,4:N-3];
-    plot(Q[2,:], ylims=(0,2), ribbon=1.96*Q[1,:], fillalpha=0.3, color="blue");
-    savefig("$dirname/proj_similarity.png");
-end
-
-
-function compare_subspaces( eigenvectors::Array{Array{Float64,2},1}, 
-                            eigenvals::Array{Array{Float64,1}}, dirname::String )
+function compare_subspaces( eigenvectors::Array{Array{Float64,2},1}, dirname::String )
     N = length(eigenvectors);
     Q = zeros( 2, N );
     for ix in 4:1:(N-3)
@@ -109,21 +85,27 @@ function compare_subspaces( eigenvectors::Array{Array{Float64,2},1},
     end
     Q = Q[:,4:N-3];
 
+    if (!isdir(dirname))
+        mkpath(dirname)
+    end
+
     plot(Q[2,:], ylims=(0,2), ribbon=1.96*Q[1,:], fillalpha=0.3, color="blue");
     savefig("$dirname/subspace_similarity.png");
 end
 
 
-function predict_layer(X, y, layer_node)
+function predict_layer(X, y, layer_node, dirname)
     y_new = Bool[];
     X_new = Array{Float64,2}[];
     ix = 1;
 
+    eigenvectors = Array{Float64,2}[];
     for s in 1:length(layer_node)
         next = ix == length(X) ? ix-1 : ix + 1;
         site_node = layer_node["site$s"];
         mode = TCGRN.Mode(read(site_node["mode"]));
         U = read(site_node["U"]);
+        push!(eigenvectors, U);
         A = X[ix]; B = X[next];
         try
             ϕ = mode == TCGRN.direct_sum ? 
@@ -140,6 +122,7 @@ function predict_layer(X, y, layer_node)
         push!(y_new, y[ix] | y[next]);
         ix += 2;
     end
+    compare_subspaces(eigenvectors, dirname)
 
     return X_new, y_new
 end
