@@ -141,7 +141,7 @@ function coarse_grain_layer( Φ::Array{SiteInfo,1}, eps::Float64 )
         
         A = Φ[s].ϕ; B = Φ[next].ϕ;
         U = eigenvectors[ix][:,r:end];
-        P = modes[ix] == direct_sum ? project_sum(U, A, B) : project_prod(U, A, B);              
+        P = modes[ix] == direct_sum ? project_sum(U, A, B) : project_prod(U, A, B);
         P[abs.(P) .< ZERO_THRESH] .= 0.0;  
         y = Φ[s].y | Φ[next].y;
         S = SiteInfo(U, eigenvals[ix], P, modes[ix], y);

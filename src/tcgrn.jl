@@ -2,15 +2,12 @@ using DSP
 using HDF5
 using Plots
 using Random
-using Measures
-using MLKernels
 using StatsBase
 using DataFrames
 using Statistics
 using Clustering
 using Distributed
 using KernelDensity
-using GaussianMixtures
 using MultivariateStats
 
 
