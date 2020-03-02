@@ -27,7 +27,7 @@ function main()
 
     subject_ids = ["chb01"];
     for subject_id in subject_ids
-        ε_list = [1e-5];
+        ε_list = [1e-4];
         for ε in ε_list
             TCGRN.process_subject(subject_id, ε);
             dirname = "../output/$subject_id/$ε";
