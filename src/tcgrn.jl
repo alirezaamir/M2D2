@@ -1,5 +1,6 @@
 using DSP
 using HDF5
+using Dates
 using Plots
 using Random
 using Measures
@@ -33,11 +34,67 @@ function main()
         for ε in ε_list
             # TCGRN.process_subject(subject_id, ε);
             dirname = "../output/$subject_id/$ε";
-            features, labels = coarse_grain_data(subject_id, ε, dirname);
-            predict_kde(features, labels, subject_id, dirname);
+            do_subspace_detection(subject_id, ε, dirname);
+            # features, labels = coarse_grain_data(subject_id, ε, dirname);
+            # predict_kde(features, labels, subject_id, dirname);
         end
     end
 end
+
+
+function do_subspace_detection(subject_id, eps, dirname)
+    h5_file = HDF5.h5open("../input/eeg_data_temples2.h5", "r");
+    h5_node = h5_file[subject_id];
+    Φ = prepare_data(h5_node);
+    close(h5_file);
+
+    X = [S.ϕ for S in Φ];
+    y = [S.y for S in Φ];
+
+    h5_file = HDF5.h5open("../temp/$eps/decomp_$subject_id.h5")
+    num_layers = length(names(h5_file));
+
+    for l in 1:num_layers
+        @info "Predicting on layer: $l"
+        next(ix) = ix == length(y) ? ix-1 : ix + 1;
+        y = [y[ix] | y[next(ix)] for ix in 1:2:length(y)];
+        
+        layer_node = h5_file["layer$l"]
+        eigs = [read(layer_node["site$s"]["U"]) for s in 1:length(layer_node)];
+        V, dists = compute_average_subspace( eigs );
+        time = collect(1:length(dists))
+        labels = (Dates.Second(1)*2^l).*time;
+        scatter(time[.!y], dists[.!y],
+            color="green", label="Non-Ictal", alpha=0.1);
+        scatter!(time[y], dists[y], color="cyan", label="Ictal");
+        savefig("$dirname/layer$l/global_dists.png"); closeall();
+
+        f(x) = compute_average_subspace( x )[2];
+        dists = collect(Iterators.flatten(
+            [f( eigs[ix-100:ix] ) for ix in 101:100:length(eigs)]));
+        y = collect(Iterators.flatten(
+            [y[ix-100:ix] for ix in 101:100:length(eigs)]));
+        time = collect(Iterators.flatten(
+            [time[ix-100:ix] for ix in 101:100:length(eigs)])); 
+        scatter(time[.!y], dists[.!y],
+            color="green", label="Non-Ictal", alpha=0.1);
+        scatter!(time[y], dists[y], color="cyan", label="Ictal");
+        savefig("$dirname/layer$l/local_dists.png"); closeall();        
+    end
+end
+
+
+function compute_average_subspace(B::Array{Array{Float64,2},1})
+    P_bar = (1/length(B))*sum([U*U' for U in B]);
+    λ, F = eigen( P_bar );
+    s = sum( λ .> 0.5 );
+    perm = sortperm( -1*λ );
+    F = F[:,perm];
+    V = F[:,1:s];
+    dists = [0.5*norm(U*U' - V*V') for U in B];
+    return V, dists
+end
+
 
 
 function coarse_grain_data(subject_id, ε, dirname)
@@ -58,72 +115,12 @@ function coarse_grain_data(subject_id, ε, dirname)
             @info "Coarse graining layer: $l"
             layer_node = h5_file["layer$l"];
             X, y = predict_layer(X, y, layer_node);
-            compare_projections( X, "$dirname/layer$l" );
             push!(features, X);
             push!(labels, y);
         end
     end
 
     return features, labels
-end
-
-
-function compare_projections( X, dirname )
-    N = length( X );
-    Q = zeros( 2, N );
-    for ix in 4:1:(N-3)
-        P = zeros( 6 );
-        L = X[ix];
-        vv = 1;
-        for jj in ix-3:1:ix+3
-            if jj != ix
-                M = X[jj];
-                P[vv] = 2*norm(L - M) / (norm( L ) + norm( M ));
-            end
-        end
-        Q[1,ix] = sqrt( var( P ) );
-        Q[2,ix] = mean( P );
-    end
-    Q = Q[:,4:N-3];
-    plot(Q[2,:], ylims=(0,2), ribbon=1.96*Q[1,:], fillalpha=0.3, color="blue");
-    savefig("$dirname/proj_similarity.png");
-end
-
-
-function compare_subspaces( eigenvectors::Array{Array{Float64,2},1}, 
-                            eigenvals::Array{Array{Float64,1}}, dirname::String )
-    N = length(eigenvectors);
-    Q = zeros( 2, N );
-    for ix in 4:1:(N-3)
-        P = zeros( 6 );
-        L = loadings( eigenvectors[ix], eigenvals[ix] );
-        vv = 1;
-        for jj in ix-3:1:ix+3
-            if jj != ix
-                M = loadings( eigenvectors[jj], eigenvals[jj] );
-                λ = eigvals( L*(M'*M)*L' );
-                P[vv] = sum( λ );
-                vv += 1;
-            end
-        end
-        P /= size( eigenvectors[1], 2 );
-        Q[1,ix] = sqrt( var( P ) );
-        Q[2,ix] = mean( P );
-    end
-    Q = Q[:,4:N-3];
-
-    plot(Q[2,:], ylims=(0,2), ribbon=1.96*Q[1,:], fillalpha=0.3, color="blue");
-    savefig("$dirname/subspace_similarity.png");
-end
-
-
-function loadings( U, λ )
-    V = zeros( size( U ) );
-    λ = sqrt.(λ[end-size(U,2)+1:end]);
-    for ix in 1:size(U,2)
-        V[:,ix] = U[:,ix]*λ[ix];
-    end
-    return V
 end
 
 
