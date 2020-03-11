@@ -3,15 +3,13 @@ using HDF5
 using Dates
 using Plots
 using Random
-using Measures
-using MLKernels
 using StatsBase
 using DataFrames
 using Statistics
 using Clustering
 using Distributed
 using KernelDensity
-using GaussianMixtures
+using MultivariateStats
 
 
 # nproc = min(10, Int(length(Sys.cpu_info()) / 8));
@@ -30,7 +28,7 @@ function main()
 
     subject_ids = ["chb01"];
     for subject_id in subject_ids
-        ε_list = [1e-5];
+        ε_list = [1e-4];
         for ε in ε_list
             # TCGRN.process_subject(subject_id, ε);
             dirname = "../output/$subject_id/$ε";
@@ -129,11 +127,13 @@ function predict_layer(X, y, layer_node)
     X_new = Array{Float64,2}[];
     ix = 1;
 
+    eigenvectors = Array{Float64,2}[];
     for s in 1:length(layer_node)
         next = ix == length(X) ? ix-1 : ix + 1;
         site_node = layer_node["site$s"];
         mode = TCGRN.Mode(read(site_node["mode"]));
         U = read(site_node["U"]);
+        push!(eigenvectors, U);
         A = X[ix]; B = X[next];
         try
             ϕ = mode == TCGRN.direct_sum ? 
@@ -150,6 +150,7 @@ function predict_layer(X, y, layer_node)
         push!(y_new, y[ix] | y[next]);
         ix += 2;
     end
+    compare_subspaces(eigenvectors, dirname)
 
     return X_new, y_new
 end
