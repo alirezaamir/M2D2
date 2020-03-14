@@ -20,7 +20,7 @@ def main():
             if len(node.attrs.seizures) > 0:
                 continue
             else:
-                ixs = np.random.random_integers(SEG_LENGTH, data.shape[0], size=1000)
+                ixs = np.random.random_integers(SEG_LENGTH, data.shape[0], size=5000)
             X = compute_band_relpower([data[ix-SEG_LENGTH:ix,:-1] for ix in ixs])
             y = [np.any(data[ix-SEG_LENGTH:ix,-1] > 0) for ix in ixs]
 
@@ -42,8 +42,9 @@ def main():
                 X.append(compute_band_relpower(
                     np.expand_dims(data[ix-SEG_LENGTH:ix,:-1], axis=0)
                     ).ravel())
-            break
             X_test.append(np.vstack(X))
+            break
+
     
     X_test = np.concatenate(X_test)
     ixs = range(512, X_test.shape[0])
@@ -56,13 +57,17 @@ def estimate_prob_mc(X_no, X_yes, Q, mc_iter=30):
     return P_yes, P_no
 
 
-def compute_mmd_mc(X, Y):
+def compute_mmd_mc(X, Y, mc=100):
     N = np.float(X.shape[0])
     M = np.float(Y.shape[0])
-    Kxx = rbf_kernel(X, X).sum()
-    Kxy = rbf_kernel(X, Y).sum()
-    Kyy = rbf_kernel(Y, Y).sum()
-    return (1/(N*N))*Kxx + (1/(M*M))*Kyy - (2/(N*M))*Kxy
+    mmd = 0
+    for _ in range(mc):
+        s = np.random.choice(N, size=1024)
+        Kxx = rbf_kernel(X[s,:], X[s,:]).sum()
+        Kxy = rbf_kernel(X[s,:], Y).sum()
+        Kyy = rbf_kernel(Y, Y).sum()
+        mmd += (1/(N*N))*Kxx + (1/(M*M))*Kyy - (2/(N*M))*Kxy
+    return mmd / float(mc)
 
 
 def compute_band_relpower(X):
