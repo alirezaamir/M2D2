@@ -31,7 +31,7 @@ import utils
 # SIMILARITY LOSS
 ################################################################################
 def maximum_mean_discrepancy(x, y, kernel=utils.gaussian_kernel_matrix):
-  r"""Computes the Maximum Mean Discrepancy (MMD) of two samples: x and y.
+    r"""Computes the Maximum Mean Discrepancy (MMD) of two samples: x and y.
   Maximum Mean Discrepancy (MMD) is a distance-measure between the samples of
   the distributions of x and y. Here we use the kernel two sample estimate
   using the empirical mean of the two distributions.
@@ -47,19 +47,19 @@ def maximum_mean_discrepancy(x, y, kernel=utils.gaussian_kernel_matrix):
   Returns:
       a scalar denoting the squared maximum mean discrepancy loss.
   """
-  with tf.name_scope('MaximumMeanDiscrepancy'):
-    # \E{ K(x, x) } + \E{ K(y, y) } - 2 \E{ K(x, y) }
-    cost = tf.reduce_mean(kernel(x, x))
-    cost += tf.reduce_mean(kernel(y, y))
-    cost -= 2 * tf.reduce_mean(kernel(x, y))
+    with tf.name_scope('MaximumMeanDiscrepancy'):
+        # \E{ K(x, x) } + \E{ K(y, y) } - 2 \E{ K(x, y) }
+        cost = tf.reduce_mean(kernel(x, x))
+        cost += tf.reduce_mean(kernel(y, y))
+        cost -= 2 * tf.reduce_mean(kernel(x, y))
 
-    # We do not allow the loss to become negative.
-    cost = tf.where(cost > 0, cost, 0, name='value')
-  return cost
+        # We do not allow the loss to become negative.
+        cost = tf.where(cost > 0, cost, 0, name='value')
+    return cost
 
 
 def mmd_loss(source_samples, target_samples, scope=None):
-  """Adds a similarity loss term, the MMD between two representations.
+    """Adds a similarity loss term, the MMD between two representations.
   This Maximum Mean Discrepancy (MMD) loss is calculated with a number of
   different Gaussian kernels.
   Args:
@@ -69,15 +69,15 @@ def mmd_loss(source_samples, target_samples, scope=None):
   Returns:
     a scalar tensor representing the MMD loss value.
   """
-  sigmas = [
-      1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 5, 10, 15, 20, 25, 30, 35, 100,
-      1e3, 1e4, 1e5, 1e6
-  ]
-  gaussian_kernel = partial(
-      utils.gaussian_kernel_matrix, sigmas=tf.constant(sigmas))
+    sigmas = [
+        1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 5, 10, 15, 20, 25, 30, 35, 100,
+        1e3, 1e4, 1e5, 1e6
+    ]
+    gaussian_kernel = partial(
+        utils.gaussian_kernel_matrix, sigmas=tf.constant(sigmas))
 
-  loss_value = maximum_mean_discrepancy(
-      source_samples, target_samples, kernel=gaussian_kernel)
-  loss_value = tf.maximum(1e-4, loss_value) * 1.0
+    loss_value = maximum_mean_discrepancy(
+        source_samples, target_samples, kernel=gaussian_kernel)
+    loss_value = tf.maximum(1e-4, loss_value) * 1.0
 
-  return loss_value
+    return loss_value

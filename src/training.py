@@ -58,7 +58,7 @@ def main():
     LOG.info("Training Model with parameters:{}".format(param_str))
 
     build_model = mmd_vae.build_model
-    root = "../../output/vae/{}/".format(arch)
+    root = "../output/vae/{}/".format(arch)
     stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}"
     dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay)
     if not os.path.exists(dirname):
@@ -107,7 +107,7 @@ def train_model(model, dirname, lr_init, decay, beta):
 
 
 def build_dataset(mode, batch_size):
-    dirname = "../../temp/vae/{}".format(mode)
+    dirname = "../temp/vae/{}".format(mode)
     filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname)]
     dataset = tf.data.TFRecordDataset(
             filenames
