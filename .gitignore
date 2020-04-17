@@ -6,3 +6,7 @@ temp
 *.npz
 .vscode
 lsqr_example
+test_code
+__pycache__
+output
+*.idea

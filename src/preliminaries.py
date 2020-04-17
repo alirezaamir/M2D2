@@ -12,8 +12,7 @@ np.random.seed(13298)
 def main():
     S = MinMaxScaler()
     modes = {"train": [], "test": [], "valid": []}
-    
-    in_path = "../../external/physionet/eeg_data_temples2.h5"
+    in_path = "../input/eeg_data_temples2.h5"
     with tables.open_file(in_path) as h5_file:
         for node in h5_file.walk_nodes("/", "CArray"):
             m = np.random.choice(["train","test","valid"], p=[0.7, 0.1, 0.2])
@@ -26,7 +25,7 @@ def main():
 
 
 def hdf_to_tfrecord(node_list, in_path, window_size, S, mode):
-    dirname = "../../temp/vae/{}".format(mode)
+    dirname = "../temp/vae/{}".format(mode)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     
@@ -36,7 +35,6 @@ def hdf_to_tfrecord(node_list, in_path, window_size, S, mode):
             with tf.io.TFRecordWriter(filename) as writer:
                 data = h5_file.get_node(node).read()
                 X = S.transform(data[:,:-1])
-            
                 for ix in range(window_size, X.shape[0], window_size):
                     Xw = X[ix-window_size:ix,:]
                     y = np.any(data[:,-1][ix-window_size:ix])
@@ -47,7 +45,7 @@ def hdf_to_tfrecord(node_list, in_path, window_size, S, mode):
 def serialize_example(X, y):
     feature = {
         "channels": _bytes_feature(X),
-        "label":    _int64_feature(y)
+        "label":    _int64_feature(int(y))
     }
 
     example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
@@ -63,6 +61,18 @@ def _bytes_feature(array):
 
 def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+
+def read_records(node_list, in_path, window_size, S, mode):
+    dirname = "../temp/vae/{}".format(mode)
+    count = 0
+    for node in node_list:
+        filename = "{}/{}.tfrecord".format(dirname, node.split("/")[-1])
+        raw_dataset = tf.data.TFRecordDataset([filename])
+
+        for raw_record in raw_dataset.take(100000):
+            count += 1
+    print('mode {}, count {}'.format(mode, count))
 
 
 if __name__=="__main__":
