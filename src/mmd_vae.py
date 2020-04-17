@@ -1,4 +1,3 @@
-import utils
 import numpy as np
 import pandas as pd
 
@@ -8,6 +7,7 @@ import tensorflow.keras.backend as K
 from losses import mmd_loss
 from tensorflow import keras
 from tensorflow.keras import models, layers, losses
+from tensorflow.keras.utils import plot_model
 
 
 def build_model(input_shape=None, 
@@ -73,3 +73,8 @@ def sampling(args):
     dim = K.int_shape(z_mean)[1]
     epsilon = K.random_normal(shape=(batch, dim))
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
+
+
+if __name__ == '__main__':
+    model = build_model(input_shape=(1024,2,), enc_dimension=100, beta=0, optim='adam')
+    plot_model(model[0], '../output/VAE_model.png', show_shapes=True, show_layer_names=False)
