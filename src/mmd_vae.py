@@ -18,6 +18,8 @@ def build_model(input_shape=None,
 
     ii = layers.Input(shape=(input_shape))
     x = ii
+    i_complex = tf.cast(ii, dtype=tf.complex64)
+    input_fft = tf.signal.fft(i_complex)
 
     num_conv_layers = 3
     for _ in range(num_conv_layers):
@@ -46,20 +48,27 @@ def build_model(input_shape=None,
     decoder = models.Model(
         inputs=latent_inputs, outputs=dec_output, name="decoder")
     x_hat = decoder(encoder(ii)[2])
+    x_hat_complex = tf.cast(x_hat, dtype=tf.complex64)
+    x_hat_fft = tf.signal.fft(x_hat_complex)
     
     recons_cost = K.mean(losses.mse(ii, x_hat))
+    freq_cost = K.mean(losses.mse(input_fft, x_hat_fft))
+    freq_cost = K.abs(freq_cost)
 
     z_actual = tf.random.normal(tf.stack([200, enc_dimension]))
     divergence = mmd_loss(z, z_actual)
 
-    cost = recons_cost + beta*divergence
+    cost = recons_cost + beta*divergence + gamma*freq_cost
 
     model = models.Model(inputs=ii, outputs=x_hat)
     model.add_loss(cost)
-    model.compile(optim)
+    model.compile(optimizer=optim)
     
     model.metrics.append(recons_cost)
     model.metrics_names.append("recons_cost")
+
+    model.metrics.append(freq_cost)
+    model.metrics_names.append("freq_cost")
     
     model.metrics.append(divergence)
     model.metrics_names.append("mmd_elbo")

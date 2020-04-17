@@ -72,7 +72,7 @@ def main():
         "input_shape": (SEG_N, 2,),
         "enc_dimension": latent_dim,
         "beta": beta,
-        "gamma": 1e-3,
+        "gamma": 1,
         "optim": Adam(lr)
     }
 
