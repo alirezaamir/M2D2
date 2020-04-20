@@ -18,8 +18,8 @@ def build_model(input_shape=None,
 
     ii = layers.Input(shape=(input_shape))
     x = ii
-    i_complex = tf.cast(ii, dtype=tf.complex64)
-    input_fft = tf.signal.fft(i_complex)
+    # i_complex = tf.cast(ii, dtype=tf.complex64)
+    input_fft = tf.signal.rfft(ii)
 
     num_conv_layers = 3
     for _ in range(num_conv_layers):
@@ -48,8 +48,8 @@ def build_model(input_shape=None,
     decoder = models.Model(
         inputs=latent_inputs, outputs=dec_output, name="decoder")
     x_hat = decoder(encoder(ii)[2])
-    x_hat_complex = tf.cast(x_hat, dtype=tf.complex64)
-    x_hat_fft = tf.signal.fft(x_hat_complex)
+    # x_hat_complex = tf.cast(x_hat, dtype=tf.complex64)
+    x_hat_fft = tf.signal.rfft(x_hat)
     
     recons_cost = K.mean(losses.mse(ii, x_hat))
     freq_cost = K.mean(losses.mse(input_fft, x_hat_fft))
