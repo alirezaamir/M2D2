@@ -14,12 +14,15 @@ def build_model(input_shape=None,
                 enc_dimension=None, 
                 beta=None,
                 gamma=None,
-                optim=None):
+                optim=None,
+                FS = None):
 
     ii = layers.Input(shape=(input_shape))
     x = ii
-    # i_complex = tf.cast(ii, dtype=tf.complex64)
-    input_fft = tf.signal.rfft(ii)
+    ii_permutation = K.permute_dimensions(ii, (0, 2, 1))
+    input_fft = tf.signal.rfft(ii_permutation)
+    fft_permutation = K.permute_dimensions(input_fft, (0, 2, 1))
+    input_psd = 1 / (FS * input_shape[0]) * tf.math.square(fft_permutation)
 
     num_conv_layers = 3
     for _ in range(num_conv_layers):
@@ -48,11 +51,13 @@ def build_model(input_shape=None,
     decoder = models.Model(
         inputs=latent_inputs, outputs=dec_output, name="decoder")
     x_hat = decoder(encoder(ii)[2])
-    # x_hat_complex = tf.cast(x_hat, dtype=tf.complex64)
-    x_hat_fft = tf.signal.rfft(x_hat)
-    
+    x_hat_permutation = K.permute_dimensions(x_hat, (0, 2, 1))
+    x_hat_fft = tf.signal.rfft(x_hat_permutation)
+    fft_permutation = K.permute_dimensions(x_hat_fft, (0, 2, 1))
+    x_hat_psd = 1/(FS * input_shape[0]) * tf.math.square(fft_permutation)
+
     recons_cost = K.mean(losses.mse(ii, x_hat))
-    freq_cost = K.mean(losses.mse(input_fft, x_hat_fft))
+    freq_cost = K.mean(losses.mse(input_psd[:,1:,:], x_hat_psd[:,1:,:]))
     freq_cost = K.abs(freq_cost)
 
     z_actual = tf.random.normal(tf.stack([200, enc_dimension]))
@@ -85,5 +90,5 @@ def sampling(args):
 
 
 if __name__ == '__main__':
-    model = build_model(input_shape=(1024,2,), enc_dimension=100, beta=0, optim='adam')
+    model = build_model(input_shape=(1024,2,), enc_dimension=100, beta=0, optim='adam', gamma=100, FS= 256)
     plot_model(model[0], '../output/VAE_model.png', show_shapes=True, show_layer_names=False)

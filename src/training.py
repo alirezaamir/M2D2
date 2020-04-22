@@ -58,7 +58,7 @@ def main():
     LOG.info("Training Model with parameters:{}".format(param_str))
 
     build_model = mmd_vae.build_model
-    root = "../output/vae/{}/".format(arch)
+    root = "../output/vae/{}".format(arch)
     stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}"
     dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay)
     if not os.path.exists(dirname):
@@ -72,8 +72,9 @@ def main():
         "input_shape": (SEG_N, 2,),
         "enc_dimension": latent_dim,
         "beta": beta,
-        "gamma": 1,
-        "optim": Adam(lr)
+        "gamma": 100,
+        "optim": Adam(lr),
+        "FS": FS
     }
 
     model, _ = build_model(**build_model_args)
@@ -103,7 +104,7 @@ def train_model(model, dirname, lr_init, decay, beta):
     model.fit(train_data, validation_data=valid_data, epochs=max_epochs,
               callbacks=[early_stopping, history, scheduler, beta_annealing])
 
-    model.save(dirname + "/saved_model.h5")
+    model.save_weights(dirname + '/saved_model', save_format='tf')
 
 
 def build_dataset(mode, batch_size):
