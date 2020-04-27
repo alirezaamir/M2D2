@@ -4,7 +4,7 @@ import json
 import time
 import pywt
 import tables
-import mmd_vae
+import vae_model
 import logging
 import datetime
 import matplotlib
@@ -57,7 +57,7 @@ def main():
     ==========================""".format(arch, beta, decay, latent_dim, lr)
     LOG.info("Training Model with parameters:{}".format(param_str))
 
-    build_model = mmd_vae.build_model
+    build_model = vae_model.build_model
     root = "../output/vae/{}".format(arch)
     stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}"
     dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay)
@@ -67,12 +67,12 @@ def main():
     #     LOG.warning("Model already trained...")
     #     return
 
-    beta = K.variable(0.)
+    beta = K.variable(beta)
     build_model_args = {
         "input_shape": (SEG_N, 2,),
         "enc_dimension": latent_dim,
         "beta": beta,
-        "gamma": 100,
+        "gamma": 5e6,
         "optim": Adam(lr),
         "FS": FS
     }
