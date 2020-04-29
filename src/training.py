@@ -46,6 +46,7 @@ def main():
     latent_dim = int(sys.argv[3])
     lr = float(sys.argv[4])
     decay = float(sys.argv[5])
+    gamma = float(sys.argv[6])
 
     param_str = """
     ==========================
@@ -59,8 +60,8 @@ def main():
 
     build_model = vae_model.build_model
     root = "../output/vae/{}".format(arch)
-    stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}"
-    dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay)
+    stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}"
+    dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay, gamma)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     # else:
@@ -72,7 +73,7 @@ def main():
         "input_shape": (SEG_N, 2,),
         "enc_dimension": latent_dim,
         "beta": beta,
-        "gamma": 5e6,
+        "gamma": gamma,
         "optim": Adam(lr),
         "FS": FS
     }
