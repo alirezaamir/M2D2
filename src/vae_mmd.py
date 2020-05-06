@@ -106,11 +106,27 @@ def main():
                     ((2 / float(N * M)) * Kxy)
                 ))
 
+            ws = []
+            mmd = np.array(mmd)
+            mmd_corr = np.zeros(mmd.size)
+            for ix in range(1, mmd_corr.size):
+                w = ((Z.shape[0] - 1) / float(ix * (N - ix)))
+                ws.append(w)
+                mmd_corr[ix] = mmd[ix] - w * mmd.max()
+
+            plt.figure()
+            plt.plot(mmd_corr, label="MMD")
+            plt.axvline(x=np.min(np.where(y > 0)[0]), linewidth=2, color="red")
+            plt.axvline(x=np.max(np.where(y > 0)[0]), linewidth=2, color="red")
+            plt.savefig("{}/{}_mmd2_corrected.png".format(dirname, node._v_name))
             plt.close()
+
+            plt.figure()
             plt.plot(mmd, label="MMD")
             plt.axvline(x=np.min(np.where(y > 0)[0]), linewidth=2, color="red")
             plt.axvline(x=np.max(np.where(y > 0)[0]), linewidth=2, color="red")
-            plt.savefig("{}/{}_mmd.png".format(dirname, node._v_name))
+            plt.savefig("{}/{}_mmd2.png".format(dirname, node._v_name))
+            plt.close()
 
 
 if __name__=="__main__":
