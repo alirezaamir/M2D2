@@ -15,17 +15,21 @@ def main():
     in_path = "../input/eeg_data_temples2.h5"
     with tables.open_file(in_path) as h5_file:
         for node in h5_file.walk_nodes("/", "CArray"):
-            m = np.random.choice(["train","test","valid"], p=[0.7, 0.1, 0.2])
+            if len(node.attrs.seizures) == 1:
+                m = "test"
+            else:
+                m = np.random.choice(["train","valid"], p=[0.75, 0.25])
             modes[m].append(node._v_pathname)
             if m == "train":
                 S.partial_fit(node.read()[:,:-1])
+    print({key: len(value) for key, value in modes.items()})
 
     for m in modes:
         hdf_to_tfrecord(modes[m], in_path, SEG_N, S, m)
 
 
 def hdf_to_tfrecord(node_list, in_path, window_size, S, mode):
-    dirname = "../temp/vae/{}".format(mode)
+    dirname = "../temp/vae_mmd_data/{}".format(mode)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     

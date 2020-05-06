@@ -105,11 +105,14 @@ def train_model(model, dirname, lr_init, decay, beta):
     model.fit(train_data, validation_data=valid_data, epochs=max_epochs,
               callbacks=[early_stopping, history, scheduler, beta_annealing])
 
-    model.save_weights(dirname + '/saved_model', save_format='tf')
+    savedir = dirname + 'saved_model'
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
+    model.save_weights(savedir, save_format='tf')
 
 
 def build_dataset(mode, batch_size):
-    dirname = "../temp/vae/{}".format(mode)
+    dirname = "../temp/vae_mmd_data/{}".format(mode)
     filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname)]
     dataset = tf.data.TFRecordDataset(
             filenames

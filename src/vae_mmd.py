@@ -27,15 +27,16 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    arch = 'psd'
+    arch = 'psd_non_single_seizure'
     beta = 0.001
     latent_dim = 16
     lr = 0.0001
     decay = 0.0
+    gamma = 5000000.0
 
     root = "../output/vae/{}/".format(arch)
-    stub = "seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}"
-    dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay)
+    stub = "seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}"
+    dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma)
     build_model = vae_model.build_model
     build_model_args = {
         "input_shape": (SEG_LENGTH, 2,),
@@ -54,11 +55,11 @@ def main():
     if not os.path.exists(dirname):
         print("Model does not exist")
         exit()
-    model.load_weights(dirname + "/saved_model")
+    model.load_weights(dirname)
     intermediate_model = tf.keras.models.Model(inputs=model.inputs, outputs=model.layers[1].output)
 
     kernel = polynomial_kernel
-    kernel_name = "polynomial"
+    kernel_name = "polynomial_seizures"
     dirname = "../temp/vae_mmd/{}".format(kernel_name)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
