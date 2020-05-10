@@ -9,6 +9,8 @@ from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
 from sklearn.metrics.pairwise import rbf_kernel, polynomial_kernel, linear_kernel
 import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 
 sys.path.append("../")
 LOG = logging.getLogger(os.path.basename(__file__))
@@ -20,6 +22,18 @@ LOG.setLevel(logging.INFO)
 
 SF = 256
 SEG_LENGTH = 512
+
+
+def get_PCA(x):
+    pca = PCA(n_components=2)
+    principalComponents = pca.fit_transform(x)
+    return principalComponents
+
+
+def get_TSNE(x):
+    tsne = TSNE(n_components=2)
+    x_embedded = tsne.fit_transform(x)
+    return x_embedded
 
 
 def main():
@@ -57,7 +71,6 @@ def main():
         exit()
     model.load_weights(dirname)
     intermediate_model = tf.keras.models.Model(inputs=model.inputs, outputs=model.layers[1].output)
-
     kernel = polynomial_kernel
     kernel_name = "polynomial_seizures"
     dirname = "../temp/vae_mmd/{}".format(kernel_name)
@@ -91,7 +104,36 @@ def main():
             Z = np.array(Z)
             y = np.array(q)
 
-            latent = intermediate_model.predict(Z) [2]
+            latent = intermediate_model.predict(Z)[2]
+            sigma = intermediate_model.predict(Z)[1]
+            sum_sigma = np.sum(sigma, axis=1)
+            print('sigma: {}'.format(sum_sigma.shape))
+
+            plt.figure()
+            plt.plot(sum_sigma)
+            plt.axvline(x=np.min(np.where(y > 0)[0]), linewidth=2, color="red")
+            plt.axvline(x=np.max(np.where(y > 0)[0]), linewidth=2, color="red")
+            plt.savefig("{}/{}_sigma.png".format(dirname, node._v_name))
+            plt.close()
+
+            components = get_PCA(latent)
+
+            fig = plt.figure(figsize=(8, 8))
+            ax = fig.add_subplot(1, 1, 1)
+            ax.set_xlabel('Principal Component 1', fontsize=15)
+            ax.set_ylabel('Principal Component 2', fontsize=15)
+            ax.set_title('2 component PCA', fontsize=20)
+            targets = [0, 1]
+            colors = ['r', 'b']
+            for target, color in zip(targets, colors):
+                indicesToKeep = y == target
+                ax.scatter(components[indicesToKeep, 0]
+                           , components[indicesToKeep, 1]
+                           , c=color)
+            ax.legend(targets)
+            ax.grid()
+            fig.savefig("{}/{}_tsne.png".format(dirname, node._v_name))
+            plt.close(fig)
 
             K = kernel(latent)
             mmd = []
@@ -118,14 +160,14 @@ def main():
             plt.plot(mmd_corr, label="MMD")
             plt.axvline(x=np.min(np.where(y > 0)[0]), linewidth=2, color="red")
             plt.axvline(x=np.max(np.where(y > 0)[0]), linewidth=2, color="red")
-            plt.savefig("{}/{}_mmd2_corrected.png".format(dirname, node._v_name))
+            plt.savefig("{}/{}_mmd_corrected.png".format(dirname, node._v_name))
             plt.close()
 
             plt.figure()
             plt.plot(mmd, label="MMD")
             plt.axvline(x=np.min(np.where(y > 0)[0]), linewidth=2, color="red")
             plt.axvline(x=np.max(np.where(y > 0)[0]), linewidth=2, color="red")
-            plt.savefig("{}/{}_mmd2.png".format(dirname, node._v_name))
+            plt.savefig("{}/{}_mmd.png".format(dirname, node._v_name))
             plt.close()
 
 
