@@ -79,12 +79,13 @@ def main():
 
     with tables.open_file("../input/eeg_data_temples2.h5") as h5_file:
         for node in h5_file.walk_nodes("/", "CArray"):
-            LOG.info("Processing: {}".format(node._v_name))
-            if len(node.attrs.seizures) != 1:
+            # LOG.info("Processing: {}".format(node._v_name))
+            if len(node.attrs.seizures) < 1:
                 continue
 
             data = node.read()
             X, y = data[:, :-1], data[:, -1]
+            LOG.info("seizure number: {}".format(node.attrs.seizures))
             start = np.min(np.where(y > 0)[0])
             stop = np.max(np.where(y > 0)[0])
 
@@ -104,16 +105,30 @@ def main():
             Z = np.array(Z)
             y = np.array(q)
 
+            y_non_zero = np.where(y > 0, 1, 0)
+            y_diff = np.diff(y_non_zero)
+            start_points = np.where(y_diff > 0)[0]
+            stop_points = np.where(y_diff < 0)[0]
+            LOG.info("points: {}, {}".format(start_points, stop_points))
+
             latent = intermediate_model.predict(Z)[2]
             sigma = intermediate_model.predict(Z)[1]
+            mu = intermediate_model.predict(Z)[0]
             sum_sigma = np.sum(sigma, axis=1)
-            print('sigma: {}'.format(sum_sigma.shape))
+            mean_mu = np.mean(mu, axis=1)
 
             plt.figure()
             plt.plot(sum_sigma)
-            plt.axvline(x=np.min(np.where(y > 0)[0]), linewidth=2, color="red")
-            plt.axvline(x=np.max(np.where(y > 0)[0]), linewidth=2, color="red")
+            for seizure_start, seizure_stop in zip(start_points, stop_points):
+                plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
             plt.savefig("{}/{}_sigma.png".format(dirname, node._v_name))
+            plt.close()
+
+            plt.figure()
+            plt.plot(mean_mu)
+            for seizure_start, seizure_stop in zip(start_points, stop_points):
+                plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
+            plt.savefig("{}/{}_mu.png".format(dirname, node._v_name))
             plt.close()
 
             components = get_PCA(latent)
@@ -158,15 +173,15 @@ def main():
 
             plt.figure()
             plt.plot(mmd_corr, label="MMD")
-            plt.axvline(x=np.min(np.where(y > 0)[0]), linewidth=2, color="red")
-            plt.axvline(x=np.max(np.where(y > 0)[0]), linewidth=2, color="red")
+            for seizure_start, seizure_stop in zip(start_points, stop_points):
+                plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
             plt.savefig("{}/{}_mmd_corrected.png".format(dirname, node._v_name))
             plt.close()
 
             plt.figure()
             plt.plot(mmd, label="MMD")
-            plt.axvline(x=np.min(np.where(y > 0)[0]), linewidth=2, color="red")
-            plt.axvline(x=np.max(np.where(y > 0)[0]), linewidth=2, color="red")
+            for seizure_start, seizure_stop in zip(start_points, stop_points):
+                plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
             plt.savefig("{}/{}_mmd.png".format(dirname, node._v_name))
             plt.close()
 
