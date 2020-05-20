@@ -22,6 +22,7 @@ LOG.setLevel(logging.INFO)
 
 SF = 256
 SEG_LENGTH = 512
+EXCLUDED_SIZE = 64
 
 
 def get_PCA(x):
@@ -77,17 +78,24 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
+    subdirname = "{}/single_seizure".format(dirname)
+    if not os.path.exists(subdirname):
+        os.makedirs(subdirname)
+
     with tables.open_file("../input/eeg_data_temples2.h5") as h5_file:
         for node in h5_file.walk_nodes("/", "CArray"):
             # LOG.info("Processing: {}".format(node._v_name))
-            if len(node.attrs.seizures) < 1:
+            if len(node.attrs.seizures) != 1:
                 continue
 
             data = node.read()
             X, y = data[:, :-1], data[:, -1]
-            LOG.info("seizure number: {}".format(node.attrs.seizures))
-            start = np.min(np.where(y > 0)[0])
-            stop = np.max(np.where(y > 0)[0])
+            if len(node.attrs.seizures) < 1:
+                start = X.shape[0]//2
+                stop = X.shape[0]//2
+            else:
+                start = np.min(np.where(y > 0)[0])
+                stop = np.max(np.where(y > 0)[0])
 
             buff_mins = 20
             minv = max(0, start - (buff_mins * 60 * SF))
@@ -114,21 +122,22 @@ def main():
             latent = intermediate_model.predict(Z)[2]
             sigma = intermediate_model.predict(Z)[1]
             mu = intermediate_model.predict(Z)[0]
-            sum_sigma = np.sum(sigma, axis=1)
+            mean_sigma = np.mean(sigma, axis=1)
             mean_mu = np.mean(mu, axis=1)
 
             plt.figure()
-            plt.plot(sum_sigma)
+            plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=0.5)
+            plt.subplot(211)
+            plt.plot(mean_sigma)
+            plt.title('Sigma')
             for seizure_start, seizure_stop in zip(start_points, stop_points):
                 plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
-            plt.savefig("{}/{}_sigma.png".format(dirname, node._v_name))
-            plt.close()
-
-            plt.figure()
+            plt.subplot(212)
             plt.plot(mean_mu)
+            plt.title('Mu')
             for seizure_start, seizure_stop in zip(start_points, stop_points):
                 plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
-            plt.savefig("{}/{}_mu.png".format(dirname, node._v_name))
+            plt.savefig("{}/{}_sigma.png".format(subdirname, node._v_name))
             plt.close()
 
             components = get_PCA(latent)
@@ -147,7 +156,7 @@ def main():
                            , c=color)
             ax.legend(targets)
             ax.grid()
-            fig.savefig("{}/{}_tsne.png".format(dirname, node._v_name))
+            fig.savefig("{}/{}_PCA.png".format(subdirname, node._v_name))
             plt.close(fig)
 
             K = kernel(latent)
@@ -166,23 +175,27 @@ def main():
             ws = []
             mmd = np.array(mmd)
             mmd_corr = np.zeros(mmd.size)
+            N = Z.shape[0] - 1
             for ix in range(1, mmd_corr.size):
-                w = ((Z.shape[0] - 1) / float(ix * (N - ix)))
+                w = (N / float(ix * (N - ix)))
                 ws.append(w)
                 mmd_corr[ix] = mmd[ix] - w * mmd.max()
 
+            arg_max_mmd = np.argmax(mmd_corr[EXCLUDED_SIZE:-EXCLUDED_SIZE]) + EXCLUDED_SIZE
             plt.figure()
             plt.plot(mmd_corr, label="MMD")
             for seizure_start, seizure_stop in zip(start_points, stop_points):
                 plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
-            plt.savefig("{}/{}_mmd_corrected.png".format(dirname, node._v_name))
+            if len(node.attrs.seizures) > 0:
+                plt.plot(arg_max_mmd, mmd_corr[arg_max_mmd], 'go', markersize=12)
+            plt.savefig("{}/{}_mmd_corrected.png".format(subdirname, node._v_name))
             plt.close()
 
             plt.figure()
             plt.plot(mmd, label="MMD")
             for seizure_start, seizure_stop in zip(start_points, stop_points):
                 plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
-            plt.savefig("{}/{}_mmd.png".format(dirname, node._v_name))
+            plt.savefig("{}/{}_mmd.png".format(subdirname, node._v_name))
             plt.close()
 
 
