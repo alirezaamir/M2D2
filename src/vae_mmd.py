@@ -83,8 +83,6 @@ def main():
         os.makedirs(subdirname)
 
     middle_diff = []
-    interval_diff = []
-    interval_diff_normal = []
 
     with tables.open_file("../input/eeg_data_temples2.h5") as h5_file:
         for node in h5_file.walk_nodes("/", "CArray"):
@@ -125,44 +123,6 @@ def main():
             LOG.info("points: {}, {}".format(start_points, stop_points))
 
             latent = intermediate_model.predict(Z)[2]
-            sigma = intermediate_model.predict(Z)[1]
-            mu = intermediate_model.predict(Z)[0]
-            mean_sigma = np.mean(sigma, axis=1)
-            mean_mu = np.mean(mu, axis=1)
-
-            plt.figure()
-            plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=0.5)
-            plt.subplot(211)
-            plt.plot(mean_sigma)
-            plt.title('Sigma')
-            for seizure_start, seizure_stop in zip(start_points, stop_points):
-                plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
-            plt.subplot(212)
-            plt.plot(mean_mu)
-            plt.title('Mu')
-            for seizure_start, seizure_stop in zip(start_points, stop_points):
-                plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
-            plt.savefig("{}/{}_sigma.png".format(subdirname, node._v_name))
-            plt.close()
-
-            components = get_PCA(latent)
-
-            fig = plt.figure(figsize=(8, 8))
-            ax = fig.add_subplot(1, 1, 1)
-            ax.set_xlabel('Principal Component 1', fontsize=15)
-            ax.set_ylabel('Principal Component 2', fontsize=15)
-            ax.set_title('2 component PCA', fontsize=20)
-            targets = [0, 1]
-            colors = ['r', 'b']
-            for target, color in zip(targets, colors):
-                indicesToKeep = y == target
-                ax.scatter(components[indicesToKeep, 0]
-                           , components[indicesToKeep, 1]
-                           , c=color)
-            ax.legend(targets)
-            ax.grid()
-            fig.savefig("{}/{}_PCA.png".format(subdirname, node._v_name))
-            plt.close(fig)
 
             K = kernel(latent)
             mmd = []
@@ -196,41 +156,12 @@ def main():
             plt.savefig("{}/{}_mmd_corrected.png".format(subdirname, node._v_name))
             plt.close()
 
-            plt.figure()
-            plt.plot(mmd, label="MMD")
-            for seizure_start, seizure_stop in zip(start_points, stop_points):
-                plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
-            plt.savefig("{}/{}_mmd.png".format(subdirname, node._v_name))
-            plt.close()
-
-            t_diff= np.abs(middle_points - arg_max_mmd)
+            t_diff = np.abs(middle_points - arg_max_mmd)
             LOG.info("Time diff : {}".format(t_diff))
             middle_diff.append(t_diff)
 
-            if start_points[0] < arg_max_mmd < stop_points[0]:
-                delta = 0
-            else:
-                delta = np.min([np.abs(start_points[0] - arg_max_mmd),
-                               np.abs(arg_max_mmd - stop_points[0])])
-            T = stop_points[0]-start_points[0]
-            LOG.info("Interval diff : {}, {}T".format(delta, delta/T))
-            interval_diff.append(delta)
-            interval_diff_normal.append(delta/T)
-
-    LOG.info("Metrics:\nDelta to middle:{}\nDiff: {}\nNormalized Diff: {}".format(np.mean(middle_diff),
-                                                                                  np.mean(interval_diff),
-                                                                                  np.mean(interval_diff_normal)))
     plt.figure()
-    plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=0.5)
-    plt.subplot(311)
     plt.hist(middle_diff)
-    plt.title('to middle')
-    plt.subplot(312)
-    plt.hist(interval_diff)
-    plt.title('to start/stop point')
-    plt.subplot(313)
-    plt.hist(interval_diff_normal)
-    plt.title('normalized to start/stop point')
     plt.savefig("{}/hist_diff.png".format(subdirname))
     plt.close()
 
