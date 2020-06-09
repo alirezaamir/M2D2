@@ -11,6 +11,7 @@ from sklearn.metrics.pairwise import rbf_kernel, polynomial_kernel, linear_kerne
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
+from utils import create_seizure_dataset
 
 sys.path.append("../")
 LOG = logging.getLogger(os.path.basename(__file__))
@@ -63,9 +64,6 @@ def main():
     }
 
     model, _ = build_model(**build_model_args)
-    for layer in model.layers:
-        print(layer.name)
-        # print(layer.output.shape)
 
     if not os.path.exists(dirname):
         print("Model does not exist")
@@ -84,86 +82,65 @@ def main():
 
     middle_diff = []
 
-    with tables.open_file("../input/eeg_data_temples2.h5") as h5_file:
-        for node in h5_file.walk_nodes("/", "CArray"):
-            # LOG.info("Processing: {}".format(node._v_name))
-            if len(node.attrs.seizures) != 1:
-                continue
+    sessions = create_seizure_dataset(SEG_LENGTH, SF)
+    LOG.info("session number: {}".format(len(sessions.keys())))
 
-            data = node.read()
-            X, y = data[:, :-1], data[:, -1]
-            if len(node.attrs.seizures) < 1:
-                start = X.shape[0]//2
-                stop = X.shape[0]//2
-            else:
-                start = np.min(np.where(y > 0)[0])
-                stop = np.max(np.where(y > 0)[0])
+    for node in sessions.keys():    # Loop1: cross validation
+        test_patient = node
+        train_patients = [p for p in sessions.keys() if p != node]
+        for epoch in range(1):      # Loop2: epochs
+            for patient in train_patients:  # Loop3: train patients
+                X = sessions[patient]['data']
+                latent = intermediate_model.predict(X)[2]
+    # y_non_zero = np.where(y > 0, 1, 0)
+    # y_diff = np.diff(y_non_zero)
+    # start_points = np.where(y_diff > 0)[0]
+    # stop_points = np.where(y_diff < 0)[0]
+    # middle_points = (start_points + stop_points) // 2
+    # LOG.info("points: {}, {}".format(start_points, stop_points))
 
-            buff_mins = 20
-            minv = max(0, start - (buff_mins * 60 * SF))
-            maxv = min(X.shape[0], stop + (buff_mins * 60 * SF))
-            X = X[minv:maxv, :]
-            y = y[minv:maxv]
+                K = kernel(latent)
+                mmd = []
+                for N in range(1, X.shape[0]):
+                    M = X.shape[0] - N
+                    Kxx = K[:N, :N].sum()
+                    Kxy = K[:N, N:].sum()
+                    Kyy = K[N:, N:].sum()
+                    mmd.append(np.sqrt(
+                        ((1 / float(N * N)) * Kxx) +
+                        ((1 / float(M * M)) * Kyy) -
+                        ((2 / float(N * M)) * Kxy)
+                    ))
 
-            sos = signal.butter(3, 50, fs=SF, btype="lowpass", output="sos")
-            X = signal.sosfilt(sos, X, axis=1)
-            Z = []
-            q = []
-            for ix in range(SEG_LENGTH, X.shape[0], SEG_LENGTH):
-                Z.append(X[ix - SEG_LENGTH:ix, :])
-                q.append(np.any(y[ix - SEG_LENGTH:ix]))
-            Z = np.array(Z)
-            y = np.array(q)
+                ws = []
+                mmd = np.array(mmd)
+                mmd_corr = np.zeros(mmd.size)
+                N = X.shape[0] - 1
+                for ix in range(1, mmd_corr.size):
+                    w = (N / float(ix * (N - ix)))
+                    ws.append(w)
+                    mmd_corr[ix] = mmd[ix] - w * mmd.max()
 
-            y_non_zero = np.where(y > 0, 1, 0)
-            y_diff = np.diff(y_non_zero)
-            start_points = np.where(y_diff > 0)[0]
-            stop_points = np.where(y_diff < 0)[0]
-            middle_points = (start_points + stop_points) // 2
-            LOG.info("points: {}, {}".format(start_points, stop_points))
+                arg_max_mmd = np.argmax(mmd_corr[EXCLUDED_SIZE:-EXCLUDED_SIZE]) + EXCLUDED_SIZE
+                LOG.info("patient: {}, max mmd: {}". format(patient, arg_max_mmd))
 
-            latent = intermediate_model.predict(Z)[2]
-
-            K = kernel(latent)
-            mmd = []
-            for N in range(1, Z.shape[0]):
-                M = Z.shape[0] - N
-                Kxx = K[:N, :N].sum()
-                Kxy = K[:N, N:].sum()
-                Kyy = K[N:, N:].sum()
-                mmd.append(np.sqrt(
-                    ((1 / float(N * N)) * Kxx) +
-                    ((1 / float(M * M)) * Kyy) -
-                    ((2 / float(N * M)) * Kxy)
-                ))
-
-            ws = []
-            mmd = np.array(mmd)
-            mmd_corr = np.zeros(mmd.size)
-            N = Z.shape[0] - 1
-            for ix in range(1, mmd_corr.size):
-                w = (N / float(ix * (N - ix)))
-                ws.append(w)
-                mmd_corr[ix] = mmd[ix] - w * mmd.max()
-
-            arg_max_mmd = np.argmax(mmd_corr[EXCLUDED_SIZE:-EXCLUDED_SIZE]) + EXCLUDED_SIZE
-            plt.figure()
-            plt.plot(mmd_corr, label="MMD")
-            for seizure_start, seizure_stop in zip(start_points, stop_points):
-                plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
-            if len(node.attrs.seizures) > 0:
-                plt.plot(arg_max_mmd, mmd_corr[arg_max_mmd], 'go', markersize=12)
-            plt.savefig("{}/{}_mmd_corrected.png".format(subdirname, node._v_name))
-            plt.close()
-
-            t_diff = np.abs(middle_points - arg_max_mmd)
-            LOG.info("Time diff : {}".format(t_diff))
-            middle_diff.append(t_diff)
-
-    plt.figure()
-    plt.hist(middle_diff)
-    plt.savefig("{}/hist_diff.png".format(subdirname))
-    plt.close()
+    # plt.figure()
+    # plt.plot(mmd_corr, label="MMD")
+    # for seizure_start, seizure_stop in zip(start_points, stop_points):
+    #     plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
+    # if len(node.attrs.seizures) > 0:
+    #     plt.plot(arg_max_mmd, mmd_corr[arg_max_mmd], 'go', markersize=12)
+    # plt.savefig("{}/{}_mmd_corrected.png".format(subdirname, node._v_name))
+    # plt.close()
+    #
+    # t_diff = np.abs(middle_points - arg_max_mmd)
+    # LOG.info("Time diff : {}".format(t_diff))
+    # middle_diff.append(t_diff)
+    #
+    # plt.figure()
+    # plt.hist(middle_diff)
+    # plt.savefig("{}/hist_diff.png".format(subdirname))
+    # plt.close()
 
 
 if __name__=="__main__":
