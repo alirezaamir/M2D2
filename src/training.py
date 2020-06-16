@@ -60,7 +60,7 @@ def main():
 
     build_model = vae_model.build_model
     root = "../output/vae/{}".format(arch)
-    stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}"
+    stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/"
     dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay, gamma)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
