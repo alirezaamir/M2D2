@@ -95,7 +95,7 @@ def train_model(model, dirname, lr_init, decay, beta):
 
     history        = CSVLogger(dirname + "/training.log")
     early_stopping = EarlyStopping(
-        monitor="val_loss", patience=patience, restore_best_weights=True)
+        monitor="loss", patience=patience, restore_best_weights=True)
     scheduler      = LearningRateScheduler(lambda x,y: lr_init*np.exp(-decay*x))
     beta_annealing = AnnealingCallback(beta, beta_start_epoch, max_epochs)
 
@@ -112,7 +112,7 @@ def train_model(model, dirname, lr_init, decay, beta):
 
 
 def build_dataset(mode, batch_size):
-    dirname = "../temp/vae_mmd_data/{}".format(mode)
+    dirname = "../temp/vae_mmd_data/{}/{}".format(SEG_N, mode)
     filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname)]
     dataset = tf.data.TFRecordDataset(
             filenames

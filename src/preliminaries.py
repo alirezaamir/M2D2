@@ -29,7 +29,7 @@ def main():
 
 
 def hdf_to_tfrecord(node_list, in_path, window_size, S, mode):
-    dirname = "../temp/vae_mmd_data/{}".format(mode)
+    dirname = "../temp/vae_mmd_data/{}/{}".format(SEG_N, mode)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     

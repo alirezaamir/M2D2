@@ -15,10 +15,12 @@ def build_model(input_shape=None,
 
     concat_input = layers.Concatenate()([z1_input, label_input])
     # dense1 = layers.Dense(32, activation='relu')(concat_input)
-    dense1 = layers.Dense(32, activation='relu')(z1_input)
-    latent = layers.Dense(enc_dimension, activation='relu')(dense1)
-    dense3 = layers.Dense(32, activation='relu')(latent)
-    recons = layers.Dense(input_shape[0], activation=None)(dense3)
+    dense1 = layers.Dense(16, activation='tanh')(z1_input)
+    dense2 = layers.Dense(16, activation='tanh')(dense1)
+    latent = layers.Dense(enc_dimension, activation=None)(dense2)
+    dense3 = layers.Dense(16, activation='tanh')(latent)
+    dense4 = layers.Dense(16, activation='tanh')(dense3)
+    recons = layers.Dense(input_shape[0], activation=None)(dense4)
 
     # recons_cost = K.mean(losses.mse(concat_input, recons))
 
@@ -28,5 +30,5 @@ def build_model(input_shape=None,
 
 
 if __name__ == '__main__':
-    model = build_model(input_shape=(16,), enc_dimension=8, optim='adam', label_shape=(1,))
+    model = build_model(input_shape=(64,), enc_dimension=16, optim='adam', label_shape=(1,))
     plot_model(model, '../output/AE_model.png', show_shapes=True, show_layer_names=False)
