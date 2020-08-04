@@ -25,9 +25,10 @@ LOG.addHandler(ch)
 LOG.setLevel(logging.INFO)
 
 SF = 256
-SEG_LENGTH = 1024
-EXCLUDED_SIZE = 64
+SEG_LENGTH = 2048
+EXCLUDED_SIZE = 16
 AE_EPOCHS = 120
+interval_len = 4
 
 
 def get_PCA(x):
@@ -44,7 +45,6 @@ def get_TSNE(x):
 
 def get_interval_mmd(kernel, latent):
     K = kernel(latent)
-    interval_len = 32
     mmd = []
     input_length = latent.shape[0]
     N = 2 * interval_len
@@ -63,14 +63,15 @@ def get_interval_mmd(kernel, latent):
 
     ws = []
     mmd = np.array(mmd)
-    # mmd_corr = np.zeros(mmd.size)
-    # N = input_length - 1
-    # for ix in range(1, mmd_corr.size):
-    #     w = (N / float(ix * (N - ix)))
-    #     ws.append(w)
-    #     mmd_corr[ix] = mmd[ix] - w * mmd.max()
+    mmd_corr = np.zeros(mmd.size)
+    N = input_length - 1
+    for ix in range(1, mmd_corr.size):
+        w = (N / float(ix * (N - ix)))
+        ws.append(w)
+        mmd_corr[ix] = mmd[ix] - w * mmd.max()
 
-    arg_max_mmd = np.argmax(mmd[EXCLUDED_SIZE:-EXCLUDED_SIZE]) + EXCLUDED_SIZE
+    # arg_max_mmd = np.argmax(mmd[EXCLUDED_SIZE:-EXCLUDED_SIZE]) + EXCLUDED_SIZE
+    arg_max_mmd = np.argmax(mmd_corr)
     return arg_max_mmd, mmd
 
 
@@ -117,7 +118,7 @@ def plot_mmd(mmd, argmax_mmd, y_true, name, dir):
     for seizure_start, seizure_stop in zip(start_points, stop_points):
         plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
         plt.plot(argmax_mmd, mmd[argmax_mmd], 'go', markersize=12)
-    plt.savefig("{}/{}_mmd_interval.png".format(dir, name))
+    plt.savefig("{}/{}_mmd_corrected.png".format(dir, name))
     plt.close()
 
 
@@ -127,11 +128,11 @@ def main():
         os.makedirs(dirname)
 
     arch = 'psd'
-    beta = 0.001
+    beta = 0.1
     latent_dim = 16
     lr = 0.0001
     decay = 0.5
-    gamma = 5000000.0
+    gamma = 0.0
 
     root = "../output/vae/{}/".format(arch)
     stub = "seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/saved_model"
@@ -167,17 +168,10 @@ def main():
 
     sessions = create_seizure_dataset(SEG_LENGTH, SF)
     LOG.info("session number: {}".format(len(sessions.keys())))
-    ae_model_args = {
-        "input_shape": (latent_dim,),
-        "label_shape": (1,),
-        "enc_dimension": 16,
-        "optim": Adam(learning_rate=0.00001),
-    }
     for node in sessions.keys():  # Loop1: cross validation
         test_patient = node
         LOG.info("patient: {}".format(test_patient))
         train_patients = [p for p in sessions.keys() if p != node]
-        ae_model = autoencoder_model.build_model(**ae_model_args)
         for epoch in range(1):  # Loop2: epochs
             Z1_data = np.zeros((0, latent_dim))
             Z1_label = np.zeros((0,))
@@ -194,11 +188,12 @@ def main():
                 mmd_label = np.zeros(latent.shape[0])
                 mmd_label[mmd_maximum - EXCLUDED_SIZE:mmd_maximum + EXCLUDED_SIZE] = 1
                 Z1_label = np.concatenate((Z1_label, mmd_label))
-            pickle.dump({"X": Z1_data, "y": Z1_label, "label": true_label}, open("z1.pickle", "wb"))
+            pickle.dump({"X": Z1_data, "y": Z1_label, "label": true_label}, open("z1_{}.pickle".format(latent_dim), "wb"))
 
             history = CSVLogger(dirname + "/training.log")
-            ae_model.fit(x=Z1_data, y=Z1_data, epochs=AE_EPOCHS, batch_size=64,
-                         verbose=2, callbacks=[history, PrintLogs(AE_EPOCHS)])
+        break
+        # ae_model.fit(x=Z1_data, y=Z1_data, epochs=AE_EPOCHS, batch_size=64,
+        #              verbose=2, callbacks=[history, PrintLogs(AE_EPOCHS)])
 
         # X_test = sessions[test_patient]['data']
         # latent = intermediate_model.predict(X_test)[2]

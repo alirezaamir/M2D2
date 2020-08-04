@@ -1,5 +1,5 @@
 DEBUG = True
-SEG_N = 1024
+SEG_N = 2048
 if DEBUG:
     latent_dim_list = [16]
     beta_list       = [1e-3]

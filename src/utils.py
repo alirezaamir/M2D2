@@ -79,7 +79,7 @@ def create_seizure_dataset(length, sf):
                 start = np.min(np.where(y > 0)[0])
                 stop = np.max(np.where(y > 0)[0])
 
-            buff_mins = 20
+            buff_mins = 120
             minv = max(0, start - (buff_mins * 60 * sf))
             maxv = min(X.shape[0], stop + (buff_mins * 60 * sf))
             X = X[minv:maxv, :]
