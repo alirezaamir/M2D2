@@ -25,6 +25,7 @@ from functools import partial
 import tensorflow as tf
 
 import utils
+import numpy as np
 
 
 ################################################################################
@@ -81,3 +82,10 @@ def mmd_loss(source_samples, target_samples, scope=None):
     loss_value = tf.maximum(1e-4, loss_value) * 1.0
 
     return loss_value
+
+
+def log_normal_pdf(sample, mean, logvar, raxis=1):
+    log2pi = tf.math.log(2. * np.pi)
+    return tf.reduce_sum(-0.5 * ((sample - mean) ** 2. * tf.exp(-logvar) + logvar + log2pi), axis=raxis)
+
+

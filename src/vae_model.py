@@ -4,7 +4,7 @@ import pandas as pd
 import tensorflow as tf
 import tensorflow.keras.backend as K
 
-from losses import mmd_loss
+from losses import mmd_loss, log_normal_pdf
 from tensorflow import keras
 from tensorflow.keras import models, layers, losses
 from tensorflow.keras.utils import plot_model
@@ -55,15 +55,36 @@ def build_model(input_shape=None,
     x_hat_fft = tf.signal.rfft(x_hat_permutation)
     fft_permutation = K.permute_dimensions(x_hat_fft, (0, 2, 1))
     x_hat_psd = 1/(FS * input_shape[0]) * tf.math.square(fft_permutation)
+    #
+    # # cl_input = layers.Input(shape=(enc_dimension,), name='z_classifier_in')
+    # cl_dense1 = layers.Dense(enc_dimension, activation="relu", name="classifier_dense1")(latent_inputs)
+    # cl_dense2 = layers.Dense(1, activation="softmax", name="classifier_dense2")(cl_dense1)
+    # classifier = models.Model(
+    #     inputs=latent_inputs, outputs=cl_dense2, name="classifier")
+    # y_class = classifier(encoder(ii)[2])
+    #
+    # y_true = layers.Input(shape=(input_shape[1]))
 
     recons_cost = K.mean(losses.mse(ii, x_hat))
     freq_cost = K.mean(losses.mse(input_psd[:,1:,:], x_hat_psd[:,1:,:]))
     freq_cost = K.abs(freq_cost)
 
-    z_actual = tf.random.normal(tf.stack([200, enc_dimension]))
-    divergence = mmd_loss(z, z_actual)
+    # z_actual = tf.random.normal(tf.stack([200, enc_dimension]))
+    # divergence = mmd_loss(z, z_actual)
 
-    cost = recons_cost + beta*divergence + gamma*freq_cost
+    # First method for KL divergence
+    # z_actual = tf.random.normal([1, enc_dimension])
+    # kl = tf.keras.losses.KLDivergence()
+    # divergence = kl(z_actual, z)
+
+    # Second method to calculate the KL divergence
+    logpz = log_normal_pdf(z, 0., 0.)
+    logqz_x = log_normal_pdf(z, mu, sigma)
+    divergence = K.mean(-logpz + logqz_x)
+
+    # classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=y_class))
+    #
+    cost = divergence #recons_cost + beta*divergence + gamma*freq_cost #+ classification_cost
 
     model = models.Model(inputs=ii, outputs=x_hat)
     model.add_loss(cost)
