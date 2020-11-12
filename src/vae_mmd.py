@@ -26,7 +26,7 @@ LOG.setLevel(logging.INFO)
 
 SF = 256
 SEG_LENGTH = 2048
-EXCLUDED_SIZE = 16
+EXCLUDED_SIZE = 15
 AE_EPOCHS = 120
 interval_len = 4
 
@@ -43,36 +43,74 @@ def get_TSNE(x):
     return x_embedded
 
 
-def get_interval_mmd(kernel, latent):
-    K = kernel(latent)
+def get_interval_mmd(K_mat):
     mmd = []
-    input_length = latent.shape[0]
     N = 2 * interval_len
+    input_length = K_mat.shape[0]
     for index in range(interval_len, input_length - interval_len):
         M = input_length - N
-        start = index-interval_len
-        end = index+ interval_len
-        Kxx = K[start: end, start: end].sum()
-        Kxy = K[start:end, :start].sum() +  K[start:end, end:].sum()
-        Kyy = K[:start, :start].sum() + K[end:, end:].sum() + 2*K[end:, :start].sum()
+        start = index - interval_len
+        end = index + interval_len
+        Kxx = K_mat[start: end, start: end].sum()
+        Kxy = K_mat[start:end, :start].sum() + K_mat[start:end, end:].sum()
+        Kyy = K_mat[:start, :start].sum() + K_mat[end:, end:].sum() + 2 * K_mat[end:, :start].sum()
         mmd.append(np.sqrt(
             ((1 / float(N * N)) * Kxx) +
             ((1 / float(M * M)) * Kyy) -
             ((2 / float(N * M)) * Kxy)
         ))
+    return np.array(mmd)
 
+
+def get_mmd_corrected(mmd):
     ws = []
-    mmd = np.array(mmd)
     mmd_corr = np.zeros(mmd.size)
-    N = input_length - 1
+    N = mmd.shape[0] - 1
     for ix in range(1, mmd_corr.size):
         w = (N / float(ix * (N - ix)))
         ws.append(w)
         mmd_corr[ix] = mmd[ix] - w * mmd.max()
 
-    # arg_max_mmd = np.argmax(mmd[EXCLUDED_SIZE:-EXCLUDED_SIZE]) + EXCLUDED_SIZE
-    arg_max_mmd = np.argmax(mmd_corr)
-    return arg_max_mmd, mmd
+    return mmd_corr
+
+
+def find_original_index(original_index_list, new_index, K_len):
+    if len(original_index_list) == 0 :
+        return new_index
+
+    total_array = np.arange(K_len, dtype=np.int)
+    complementary_array = [i for i in total_array if i not in original_index_list]
+
+    original_index = complementary_array[new_index]
+    return original_index
+
+
+def get_changing_points(K_mat, steps):
+    removed_list = []
+    changing_point_list = []
+    initial_mmd = get_interval_mmd(K_mat)
+    original_len = K_mat.shape[0]
+    # initial_mmd_corr = get_mmd_corrected(initial_mmd)
+    for step in range(steps):
+        mmd = get_interval_mmd(K_mat)
+        # mmd_corr = get_mmd_corrected(mmd)
+        arg_max_mmd = np.argmax(mmd)
+        original_index = find_original_index(removed_list, arg_max_mmd, original_len)
+        changing_point_list.append(original_index)
+
+        start = np.max((0, arg_max_mmd - EXCLUDED_SIZE))
+        end = np.min((K_mat.shape[0], arg_max_mmd + EXCLUDED_SIZE))
+
+        # remove rows and columns in K_mat from start to end
+        changing_interval = np.arange(start, end, dtype=np.int)
+        K_mat = np.delete(K_mat, changing_interval, 0)
+        K_mat = np.delete(K_mat, changing_interval, 1)
+
+        # add the removed interval to the list for finding the original point in the next step
+        original_interval = changing_interval + (original_index - arg_max_mmd)
+        removed_list = np.concatenate((removed_list, original_interval))
+
+    return changing_point_list, initial_mmd
 
 
 def get_mmd(kernel, latent, return_mmd= False):
@@ -117,8 +155,41 @@ def plot_mmd(mmd, argmax_mmd, y_true, name, dir):
     plt.plot(mmd, label="MMD")
     for seizure_start, seizure_stop in zip(start_points, stop_points):
         plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
-        plt.plot(argmax_mmd, mmd[argmax_mmd], 'go', markersize=12)
+    for point_idx, max_point in enumerate(argmax_mmd):
+        plt.plot(max_point, mmd[max_point], 'go', markersize=18)
+        plt.text(max_point-(len(mmd)*0.02), mmd[max_point]-(mmd[argmax_mmd[0]] * 0.025),
+                 str(point_idx+1), fontsize=18, fontweight='bold')
+    plt.xlabel("Chunk index")
+    plt.ylabel("MMD")
+    plt.title("Seizure detection for patient {}".format(name))
     plt.savefig("{}/{}_mmd_corrected.png".format(dir, name))
+    plt.close()
+
+
+def plot_mu_sigma(mu, sigma, y_true, name, dir ):
+    y_non_zero = np.where(y_true > 0, 1, 0)
+    y_diff = np.diff(y_non_zero)
+    start_points = np.where(y_diff > 0)[0]
+    stop_points = np.where(y_diff < 0)[0]
+
+    plt.figure()
+    plt.plot(sigma, label="Sigma")
+    for seizure_start, seizure_stop in zip(start_points, stop_points):
+        plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.3)
+    plt.title("Sigma for patient {}".format(name))
+    plt.ylabel("Sigma")
+    plt.savefig("{}/{}_sigma.png".format(dir, name))
+    plt.close()
+
+
+def plot_input(x, name,  dir):
+    plt.figure(figsize = (27, 5))
+    x = np.ndarray.flatten(x[:,:,0])
+    length = 45
+    plt.plot(np.linspace(0,length, SF*length), x[:SF*length], label="EEG")
+    plt.xlabel("Time (sec)", fontsize=16)
+    plt.title("EEG signal for patient {}".format(name), fontsize=18)
+    plt.savefig("{}/{}_input.png".format(dir, name), transparent=True)
     plt.close()
 
 
@@ -160,43 +231,47 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    subdirname = "{}/{}".format(dirname, SEG_LENGTH)
+    subdirname = "{}/{}/{}".format(dirname, SEG_LENGTH, "high_beta")
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
-    middle_diff = []
+    middle_diff = 0
 
     sessions = create_seizure_dataset(SEG_LENGTH, SF)
-    LOG.info("session number: {}".format(len(sessions.keys())))
     for node in sessions.keys():  # Loop1: cross validation
         test_patient = node
-        LOG.info("patient: {}".format(test_patient))
-        train_patients = [p for p in sessions.keys() if p != node]
+        # train_patients = [p for p in sessions.keys() if p != node]
+        train_patients = sessions.keys()
         for epoch in range(1):  # Loop2: epochs
-            Z1_data = np.zeros((0, latent_dim))
-            Z1_label = np.zeros((0,))
-            true_label = np.zeros((0,))
+            # Z1_data = np.zeros((0, latent_dim))
+            # Z1_label = np.zeros((0,))
+            # true_label = np.zeros((0,))
             for patient in train_patients:  # Loop3: train patients
                 X = sessions[patient]['data']
+                LOG.info("session number: {}".format(len(X)))
                 y_true = sessions[patient]['label']
-                latent = intermediate_model.predict(X)[2]
-                Z1_data = np.concatenate((Z1_data, latent))
-                true_label = np.concatenate((true_label, y_true))
-                mmd_maximum, mmd = get_interval_mmd(kernel, latent)
+                # latent = intermediate_model.predict(X)[2]
+                x_in = intermediate_model.predict(X)[3]
+                plot_input(x_in, patient, subdirname)
+                continue
+                # mu = intermediate_model.predict(X)[0]
+                # sigma = intermediate_model.predict(X)[1]
+                LOG.info("patient: {}".format(patient))
+                LOG.info("latent std, mean : {}, {}".format(np.std(latent), np.mean(latent)))
+                # plot_mu_sigma(mu, sigma, y_true, patient, subdirname)
+                K = kernel(latent)
+                mmd_maximum, mmd = get_changing_points(K, 4)
+                LOG.info("mmd maximum : {}".format(mmd_maximum))
                 plot_mmd(mmd, mmd_maximum, y_true, patient, subdirname)
 
-                mmd_label = np.zeros(latent.shape[0])
-                mmd_label[mmd_maximum - EXCLUDED_SIZE:mmd_maximum + EXCLUDED_SIZE] = 1
-                Z1_label = np.concatenate((Z1_label, mmd_label))
-            pickle.dump({"X": Z1_data, "y": Z1_label, "label": true_label}, open("z1_{}.pickle".format(latent_dim), "wb"))
+
+            #     mmd_label = np.zeros(latent.shape[0])
+            #     mmd_label[mmd_maximum - EXCLUDED_SIZE:mmd_maximum + EXCLUDED_SIZE] = 1
+            #     Z1_label = np.concatenate((Z1_label, mmd_label))
+            # pickle.dump({"X": Z1_data, "y": Z1_label, "label": true_label}, open("z1_{}.pickle".format(latent_dim), "wb"))
 
             history = CSVLogger(dirname + "/training.log")
         break
-        # ae_model.fit(x=Z1_data, y=Z1_data, epochs=AE_EPOCHS, batch_size=64,
-        #              verbose=2, callbacks=[history, PrintLogs(AE_EPOCHS)])
-
-        # X_test = sessions[test_patient]['data']
-        # latent = intermediate_model.predict(X_test)[2]
 
 
     # y_non_zero = np.where(y > 0, 1, 0)
@@ -226,7 +301,7 @@ def main():
 
 
 def train_ae():
-    data = pickle.load(open("z1.pickle", "rb"))
+    data = pickle.load(open("../output/z1.pickle", "rb"))
     X, y, label = data["X"], data["y"], data["label"]
 
     ae_model_args = {
@@ -251,6 +326,6 @@ class PrintLogs(tf.keras.callbacks.Callback):
 
 
 if __name__ == "__main__":
-    # tf.config.experimental.set_visible_devices([], 'GPU')
+    tf.config.experimental.set_visible_devices([], 'GPU')
     main()
     # train_ae()

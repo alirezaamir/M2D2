@@ -36,7 +36,7 @@ def build_model(input_shape=None,
     sigma = layers.Dense(enc_dimension, activation="linear", name="sigma")(x)
     z = layers.Lambda(
         sampling, output_shape=(enc_dimension,), name="latents")([mu, sigma])
-    encoder = models.Model(inputs=ii, outputs=[mu, sigma, z], name="encoder")
+    encoder = models.Model(inputs=ii, outputs=[mu, sigma, z, ii], name="encoder")
 
     latent_inputs = layers.Input(shape=(enc_dimension,), name='z_sampling')
     q = layers.Dense(shape[1]*shape[2], activation="relu")(latent_inputs)
@@ -84,17 +84,17 @@ def build_model(input_shape=None,
 
     # classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=y_class))
     #
-    cost = divergence #recons_cost + beta*divergence + gamma*freq_cost #+ classification_cost
+    cost = recons_cost + beta*divergence + gamma*freq_cost #+ classification_cost
 
     model = models.Model(inputs=ii, outputs=x_hat)
     model.add_loss(cost)
     model.compile(optimizer=optim)
     
-    model.metrics.append(recons_cost)
-    model.metrics_names.append("recons_cost")
+    # model.metrics.append(recons_cost)
+    # model.metrics_names.append("recons_cost")
 
-    model.metrics.append(freq_cost)
-    model.metrics_names.append("freq_cost")
+    # model.metrics.append(freq_cost)
+    # model.metrics_names.append("freq_cost")
     
     model.metrics.append(divergence)
     model.metrics_names.append("mmd_elbo")

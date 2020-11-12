@@ -123,9 +123,11 @@ def build_dataset(mode, batch_size):
 
 
 def _parse_fn(proto):
-    parse_dict = {"channels": tf.io.FixedLenFeature([], tf.string)}
+    parse_dict = {"channels": tf.io.FixedLenFeature([], tf.string),
+                  "label": tf.io.FixedLenFeature([], tf.int64)}
     example = tf.io.parse_single_example(proto, parse_dict)
     X = tf.io.parse_tensor(example["channels"], out_type=tf.float32)
+    # y = tf.io.parse_tensor(example["label"], out_type=tf.int64)
     X = tf.reshape(X, [SEG_N,2])  # Annoying hack needed for Keras
     return X
 

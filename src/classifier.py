@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score, f1_score
 
 SF = 256
-SEG_LENGTH = 1024
+SEG_LENGTH = 512
 patient_samples = [3672, 1052, 3713, 2393, 2849, 7901, 1511, 2729, 3193, 3371]
 patient_index = [0, 3672,  4724,  8437, 10830, 13679, 21580, 23091, 25820, 29013, 32384]
 
@@ -30,15 +30,15 @@ def prepare_data(Z1, mmd, label, idx):
 
 
 def main():
-    data = pickle.load(open("z1.pickle", "rb"))
+    data = pickle.load(open("../output/z1.pickle", "rb"))
     Z1, mmd, label = data["X"], data["y"], data["label"]
     for idx in range(10):  # cross_validation
         X_train, y_train , X_test, y_test = prepare_data(Z1, mmd, label, idx)
         clf = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=0)
         clf.fit(X_train, y_train)
-        predict = clf.predict(X_test)
-        accuracy = accuracy_score(y_test, predict)
-        f1 = f1_score(y_test, predict)
+        predict = clf.predict(X_train)
+        accuracy = accuracy_score(y_train, predict)
+        f1 = f1_score(y_train, predict)
         print("Patient {}: Accuracy: {:.3f}, F1 score: {:.3f}".format(idx, accuracy, f1))
 
 
