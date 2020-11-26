@@ -47,6 +47,7 @@ def main():
     lr = float(sys.argv[4])
     decay = float(sys.argv[5])
     gamma = float(sys.argv[6])
+    test_patient = int(sys.argv[7])
 
     param_str = """
     ==========================
@@ -60,8 +61,8 @@ def main():
 
     build_model = vae_model.build_model
     root = "../output/vae/{}".format(arch)
-    stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/"
-    dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay, gamma)
+    stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}"
+    dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay, gamma, test_patient)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     # else:
@@ -84,12 +85,12 @@ def main():
     LOG.info("Model Summary:")
     LOG.info("\n".join(model_summary))
 
-    train_model(model, dirname, lr, decay, beta)
+    train_model(model, dirname, lr, decay, beta, test_patient)
 
 
-def train_model(model, dirname, lr_init, decay, beta):
-    max_epochs = 200
-    patience   = 30
+def train_model(model, dirname, lr_init, decay, beta, test_patient):
+    max_epochs = 50  # 200
+    patience   = 20  # 30
     batch_size = 32
     beta_start_epoch = 10
 
@@ -99,8 +100,8 @@ def train_model(model, dirname, lr_init, decay, beta):
     scheduler      = LearningRateScheduler(lambda x,y: lr_init*np.exp(-decay*x))
     beta_annealing = AnnealingCallback(beta, beta_start_epoch, max_epochs)
 
-    train_data = build_dataset("train", batch_size)
-    valid_data = build_dataset("valid", batch_size)
+    train_data = build_dataset("train", batch_size, test_patient)
+    valid_data = build_dataset("valid", batch_size, test_patient)
 
     model.fit(train_data, validation_data=valid_data, epochs=max_epochs,
               callbacks=[early_stopping, history, scheduler, beta_annealing])
@@ -111,9 +112,10 @@ def train_model(model, dirname, lr_init, decay, beta):
     model.save_weights(savedir, save_format='tf')
 
 
-def build_dataset(mode, batch_size):
+def build_dataset(mode, batch_size, test_patient):
     dirname = "../temp/vae_mmd_data/{}/{}".format(SEG_N, mode)
-    filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname)]
+    filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if not x.startswith("chb{:02d}".format(test_patient))]
+    print("Files: {}".format(filenames))
     dataset = tf.data.TFRecordDataset(
             filenames
         ).map(
