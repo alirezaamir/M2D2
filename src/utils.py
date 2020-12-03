@@ -87,14 +87,14 @@ def create_seizure_dataset(length, sf):
 
             sos = signal.butter(3, 50, fs=sf, btype="lowpass", output="sos")
             X = signal.sosfilt(sos, X, axis=1)
-            Z = []
-            q = []
+            X_segments = []
+            y_segments = []
             for ix in range(length, X.shape[0], length):
-                Z.append(X[ix - length:ix, :])
-                q.append(np.any(y[ix - length:ix]))
-            Z = np.array(Z)
-            y = np.array(q)
-            node_dict = {'data': Z, 'label': y, 'seizure': node.attrs.seizures}
+                X_segments.append(X[ix - length:ix, :])
+                y_segments.append(np.any(y[ix - length:ix]))
+            X_segments = np.array(X_segments)
+            y_segments = np.array(y_segments)
+            node_dict = {'data': X_segments, 'label': y_segments, 'seizure': node.attrs.seizures}
             sessions_dict[node._v_name] = node_dict
 
     return sessions_dict

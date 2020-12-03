@@ -106,7 +106,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     model.fit(train_data, validation_data=valid_data, epochs=max_epochs,
               callbacks=[early_stopping, history, scheduler, beta_annealing])
 
-    savedir = dirname + 'saved_model'
+    savedir = dirname + '/saved_model/'
     if not os.path.exists(savedir):
         os.makedirs(savedir)
     model.save_weights(savedir, save_format='tf')

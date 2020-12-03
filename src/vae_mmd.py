@@ -25,7 +25,7 @@ LOG.addHandler(ch)
 LOG.setLevel(logging.INFO)
 
 SF = 256
-SEG_LENGTH = 2048
+SEG_LENGTH = 1024
 EXCLUDED_SIZE = 15
 AE_EPOCHS = 120
 interval_len = 4
@@ -198,16 +198,15 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    arch = 'psd'
-    beta = 0.1
+    arch = 'unsupervised'
+    beta = 0.001
     latent_dim = 16
     lr = 0.0001
     decay = 0.5
     gamma = 0.0
 
     root = "../output/vae/{}/".format(arch)
-    stub = "seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/saved_model"
-    dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma)
+    stub = "seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}/saved_model/"
     build_model = vae_model.build_model
     build_model_args = {
         "input_shape": (SEG_LENGTH, 2,),
@@ -220,58 +219,43 @@ def main():
 
     model, _ = build_model(**build_model_args)
 
-    if not os.path.exists(dirname):
-        print("Model does not exist in {}".format(dirname))
-        exit()
-    model.load_weights(dirname)
-    intermediate_model = tf.keras.models.Model(inputs=model.inputs, outputs=model.layers[1].output)
     kernel = polynomial_kernel
     kernel_name = "polynomial_seizures"
     dirname = "../temp/vae_mmd/{}".format(kernel_name)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    subdirname = "{}/{}/{}".format(dirname, SEG_LENGTH, "high_beta")
+    subdirname = "{}/{}/{}".format(dirname, SEG_LENGTH, "unsupervised")
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
-    middle_diff = 0
-
     sessions = create_seizure_dataset(SEG_LENGTH, SF)
-    for node in sessions.keys():  # Loop1: cross validation
-        test_patient = node
-        # train_patients = [p for p in sessions.keys() if p != node]
-        train_patients = sessions.keys()
-        for epoch in range(1):  # Loop2: epochs
-            # Z1_data = np.zeros((0, latent_dim))
-            # Z1_label = np.zeros((0,))
-            # true_label = np.zeros((0,))
-            for patient in train_patients:  # Loop3: train patients
-                X = sessions[patient]['data']
-                LOG.info("session number: {}".format(len(X)))
-                y_true = sessions[patient]['label']
-                # latent = intermediate_model.predict(X)[2]
-                x_in = intermediate_model.predict(X)[3]
-                plot_input(x_in, patient, subdirname)
+
+    for test_patient in range(10):  # Loop1: cross validation
+        for node in sessions.keys():   # Loop2: nodes in the dataset
+            print("node: {}".format(node))
+            patient_num = int(node[3:5])
+            if test_patient != patient_num:
                 continue
-                # mu = intermediate_model.predict(X)[0]
-                # sigma = intermediate_model.predict(X)[1]
-                LOG.info("patient: {}".format(patient))
-                LOG.info("latent std, mean : {}, {}".format(np.std(latent), np.mean(latent)))
-                # plot_mu_sigma(mu, sigma, y_true, patient, subdirname)
-                K = kernel(latent)
-                mmd_maximum, mmd = get_changing_points(K, 4)
-                LOG.info("mmd maximum : {}".format(mmd_maximum))
-                plot_mmd(mmd, mmd_maximum, y_true, patient, subdirname)
 
+            # Load specific weights for the model
+            dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma, test_patient)
+            if not os.path.exists(dirname):
+                print("Model does not exist in {}".format(dirname))
+                exit()
+            model.load_weights(dirname)
+            intermediate_model = tf.keras.models.Model(inputs=model.inputs, outputs=model.layers[1].output)
+            LOG.info("session name: {}".format(test_patient))
+            X = sessions[node]['data']
+            LOG.info("session number: {}".format(len(X)))
+            y_true = sessions[node]['label']
+            latent = intermediate_model.predict(X)[2]
+            K = kernel(latent)
+            mmd_maximum, mmd = get_changing_points(K, 4)
+            LOG.info("mmd maximum : {}".format(mmd_maximum))
+            plot_mmd(mmd, mmd_maximum, y_true, node, subdirname)
 
-            #     mmd_label = np.zeros(latent.shape[0])
-            #     mmd_label[mmd_maximum - EXCLUDED_SIZE:mmd_maximum + EXCLUDED_SIZE] = 1
-            #     Z1_label = np.concatenate((Z1_label, mmd_label))
-            # pickle.dump({"X": Z1_data, "y": Z1_label, "label": true_label}, open("z1_{}.pickle".format(latent_dim), "wb"))
-
-            history = CSVLogger(dirname + "/training.log")
-        break
+        # history = CSVLogger(dirname + "/training.log")
 
 
     # y_non_zero = np.where(y > 0, 1, 0)
@@ -300,20 +284,6 @@ def main():
     # plt.close()
 
 
-def train_ae():
-    data = pickle.load(open("../output/z1.pickle", "rb"))
-    X, y, label = data["X"], data["y"], data["label"]
-
-    ae_model_args = {
-        "input_shape": (64,),
-        "label_shape": (1,),
-        "enc_dimension": 64,
-        "optim": RMSprop(),
-    }
-    ae_model = autoencoder_model.build_model(**ae_model_args)
-    ae_model.fit(x=X, y=X, epochs=200, batch_size=64)
-
-
 class PrintLogs(tf.keras.callbacks.Callback):
     def __init__(self, epochs):
         self.epochs = epochs
@@ -326,6 +296,5 @@ class PrintLogs(tf.keras.callbacks.Callback):
 
 
 if __name__ == "__main__":
-    tf.config.experimental.set_visible_devices([], 'GPU')
+    # tf.config.experimental.set_visible_devices([], 'GPU')
     main()
-    # train_ae()
