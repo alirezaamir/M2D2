@@ -15,7 +15,7 @@ def build_model(input_shape=None,
                 beta=None,
                 gamma=None,
                 optim=None,
-                FS = None):
+                FS=None):
 
     ii = layers.Input(shape=(input_shape))
     x = ii
@@ -38,6 +38,15 @@ def build_model(input_shape=None,
         sampling, output_shape=(enc_dimension,), name="latents")([mu, sigma])
     encoder = models.Model(inputs=ii, outputs=[mu, sigma, z, ii], name="encoder")
 
+    #
+    y_true = layers.Input(shape=(1), name="true_label")
+    cl_input = layers.Input(shape=(enc_dimension,), name='z_classifier_in')
+    cl_dense1 = layers.Dense(enc_dimension, activation="relu", name="classifier_dense1")(cl_input)
+    cl_dense2 = layers.Dense(1, activation=None, name="classifier_dense2")(cl_dense1)
+    classifier = models.Model(
+        inputs=cl_input, outputs=cl_dense2, name="classifier")
+    y_class = classifier(encoder(ii)[2])
+
     latent_inputs = layers.Input(shape=(enc_dimension,), name='z_sampling')
     q = layers.Dense(shape[1]*shape[2], activation="relu")(latent_inputs)
     q = layers.Reshape((shape[1], shape[2]))(q)
@@ -55,15 +64,6 @@ def build_model(input_shape=None,
     x_hat_fft = tf.signal.rfft(x_hat_permutation)
     fft_permutation = K.permute_dimensions(x_hat_fft, (0, 2, 1))
     x_hat_psd = 1/(FS * input_shape[0]) * tf.math.square(fft_permutation)
-    #
-    # # cl_input = layers.Input(shape=(enc_dimension,), name='z_classifier_in')
-    # cl_dense1 = layers.Dense(enc_dimension, activation="relu", name="classifier_dense1")(latent_inputs)
-    # cl_dense2 = layers.Dense(1, activation="softmax", name="classifier_dense2")(cl_dense1)
-    # classifier = models.Model(
-    #     inputs=latent_inputs, outputs=cl_dense2, name="classifier")
-    # y_class = classifier(encoder(ii)[2])
-    #
-    # y_true = layers.Input(shape=(input_shape[1]))
 
     recons_cost = K.mean(losses.mse(ii, x_hat))
     freq_cost = K.mean(losses.mse(input_psd[:,1:,:], x_hat_psd[:,1:,:]))
@@ -82,11 +82,11 @@ def build_model(input_shape=None,
     logqz_x = log_normal_pdf(z, mu, sigma)
     divergence = K.mean(-logpz + logqz_x)
 
-    # classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=y_class))
+    classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=y_class))
     #
-    cost = recons_cost + beta*divergence + gamma*freq_cost #+ classification_cost
+    cost = recons_cost + beta*divergence + gamma*freq_cost + 0.1 * classification_cost
 
-    model = models.Model(inputs=ii, outputs=x_hat)
+    model = models.Model(inputs=[ii, y_true], outputs=x_hat)
     model.add_loss(cost)
     model.compile(optimizer=optim)
     

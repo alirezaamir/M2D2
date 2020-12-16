@@ -3,6 +3,7 @@ import tables
 
 import numpy as np
 import tensorflow as tf
+import pickle
 
 from params import *
 from sklearn.preprocessing import MinMaxScaler
@@ -21,13 +22,34 @@ def main():
             #     m = "test"
             # else:
             #     m = np.random.choice(["train","valid"], p=[0.75, 0.25])
-            m = np.random.choice(["train","valid"], p=[0.98, 0.02])
+            m = np.random.choice(["train","valid"], p=[0.8, 0.2])
             modes[m].append(node._v_pathname)
             if m == "train":
                 S.partial_fit(node.read()[:,:-1])
     print({key: len(value) for key, value in modes.items()})
     for m in modes:
-        hdf_to_tfrecord(modes[m], in_path, SEG_N, S, m)
+        hdf_to_pickle(modes[m], in_path, SEG_N, S, m)
+
+
+def hdf_to_pickle(node_list, in_path, window_size, S, mode):
+    dirname = "../temp/vae_mmd_data/{}/{}/{}".format(SEG_N, "pickle", mode)
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
+
+    with tables.open_file(in_path) as h5_file:
+        for node in node_list:
+            filename = "{}/{}.pickle".format(dirname, node.split("/")[-1])
+            output_dict = {"X": [], "y": []}
+            data = h5_file.get_node(node).read()
+            X = S.transform(data[:, :-1])
+            with open(filename, 'wb') as pickle_file:
+                for ix in range(window_size, X.shape[0], window_size):
+                    Xw = X[ix - window_size:ix, :]
+                    y = 0 if np.sum(data[:, -1][ix - window_size:ix]) == 0 else 1
+                    # print("shapes: {} {}, {}".format(Xw.shape, np.array(y).shape, y))
+                    output_dict["X"].append(Xw)
+                    output_dict["y"].append(y)
+                pickle.dump(output_dict, pickle_file)
 
 
 def hdf_to_tfrecord(node_list, in_path, window_size, S, mode):
@@ -43,7 +65,8 @@ def hdf_to_tfrecord(node_list, in_path, window_size, S, mode):
                 X = S.transform(data[:,:-1])
                 for ix in range(window_size, X.shape[0], window_size):
                     Xw = X[ix-window_size:ix,:]
-                    y = np.any(data[:,-1][ix-window_size:ix])
+                    y = np.sum(data[:,-1][ix-window_size:ix])
+                    # print("shapes: {} {}, {}".format(Xw.shape, np.array(y).shape, y))
                     example_proto = serialize_example(Xw, y)
                     writer.write(example_proto)
 
@@ -51,7 +74,7 @@ def hdf_to_tfrecord(node_list, in_path, window_size, S, mode):
 def serialize_example(X, y):
     feature = {
         "channels": _bytes_feature(X),
-        "label":    _int64_feature(int(y))
+        "label":    _bytes_feature(y)
     }
 
     example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
@@ -65,8 +88,8 @@ def _bytes_feature(array):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
-def _int64_feature(value):
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+def _float32_feature(value):
+    return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
 
 
 def read_records(node_list, in_path, window_size, S, mode):

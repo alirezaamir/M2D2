@@ -198,7 +198,7 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    arch = 'unsupervised'
+    arch = 'supervised'
     beta = 0.001
     latent_dim = 16
     lr = 0.0001
@@ -225,7 +225,7 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    subdirname = "{}/{}/{}".format(dirname, SEG_LENGTH, "unsupervised")
+    subdirname = "{}/{}/{}".format(dirname, SEG_LENGTH, "supervised")
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 

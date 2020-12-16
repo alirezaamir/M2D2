@@ -13,7 +13,7 @@ matplotlib.use("Agg")
 sys.path.append("../")
 
 import numpy as np
-import pandas as pd
+import pickle
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import tensorflow.keras.backend as K
@@ -39,6 +39,7 @@ LOG.addHandler(ch)
 LOG.setLevel(logging.INFO)
 
 FS = 256.0
+
 
 def main():
     arch = sys.argv[1]
@@ -100,10 +101,11 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     scheduler      = LearningRateScheduler(lambda x,y: lr_init*np.exp(-decay*x))
     beta_annealing = AnnealingCallback(beta, beta_start_epoch, max_epochs)
 
-    train_data = build_dataset("train", batch_size, test_patient)
-    valid_data = build_dataset("valid", batch_size, test_patient)
+    train_data, train_label = build_dataset_pickle("train", test_patient)
+    valid_data, valid_label = build_dataset_pickle("valid", test_patient)
 
-    model.fit(train_data, validation_data=valid_data, epochs=max_epochs,
+    model.fit(x=[train_data, train_label], validation_data=[valid_data, valid_label],
+              epochs=max_epochs, batch_size=batch_size,
               callbacks=[early_stopping, history, scheduler, beta_annealing])
 
     savedir = dirname + '/saved_model/'
@@ -112,26 +114,41 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     model.save_weights(savedir, save_format='tf')
 
 
-def build_dataset(mode, batch_size, test_patient):
-    dirname = "../temp/vae_mmd_data/{}/{}".format(SEG_N, mode)
+def build_dataset_pickle(mode, test_patient):
+    dirname = "../temp/vae_mmd_data/{}/pickle/{}".format(SEG_N, mode)
+    filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if not
+                 x.startswith("chb{:02d}".format(test_patient))]
+    print("Files: {}".format(filenames))
+    X_total = np.zeros((0, SEG_N, 2))
+    y_total = np.zeros((0,))
+    for filename in filenames:
+        with open(filename, "rb") as pickle_file:
+            data = pickle.load(pickle_file)
+            print("Shapes: {}, {}".format(X_total.shape, np.array(data["X"]).shape))
+            X_total = np.concatenate((X_total, np.array(data["X"])))
+            y_total = np.concatenate((y_total, np.array(data["y"])))
+
+    return X_total, y_total
+
+
+def build_dataset_tfrecord(mode, batch_size, test_patient):
+    dirname = "../temp/vae_mmd_data/{}/LOOCV/{}".format(SEG_N, mode)
     filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if not x.startswith("chb{:02d}".format(test_patient))]
     print("Files: {}".format(filenames))
-    dataset = tf.data.TFRecordDataset(
-            filenames
-        ).map(
-            _parse_fn
-        ).shuffle(4096).batch(batch_size)
+    dataset = tf.data.TFRecordDataset(filenames)
+    dataset = dataset.map(_parse_fn)
+    dataset = dataset.shuffle(4096).batch(batch_size)
     return dataset
 
 
 def _parse_fn(proto):
     parse_dict = {"channels": tf.io.FixedLenFeature([], tf.string),
-                  "label": tf.io.FixedLenFeature([], tf.int64)}
+                  "label": tf.io.FixedLenFeature([], tf.string)}
     example = tf.io.parse_single_example(proto, parse_dict)
     X = tf.io.parse_tensor(example["channels"], out_type=tf.float32)
-    # y = tf.io.parse_tensor(example["label"], out_type=tf.int64)
+    y = tf.io.parse_tensor(example["label"], out_type=tf.float32)
     X = tf.reshape(X, [SEG_N,2])  # Annoying hack needed for Keras
-    return X
+    return X, y
 
 
 class AnnealingCallback(Callback):
