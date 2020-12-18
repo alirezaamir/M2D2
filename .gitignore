@@ -10,3 +10,4 @@ test_code
 __pycache__
 output
 *.idea
+input

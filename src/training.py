@@ -115,7 +115,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
 
 
 def build_dataset_pickle(mode, test_patient):
-    dirname = "../temp/vae_mmd_data/{}/pickle/{}".format(SEG_N, mode)
+    dirname = "../temp/vae_mmd_data/{}/full/{}".format(SEG_N, mode)
     filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if not
                  x.startswith("chb{:02d}".format(test_patient))]
     print("Files: {}".format(filenames))
