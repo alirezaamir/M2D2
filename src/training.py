@@ -1,6 +1,6 @@
 import os
 import sys
-import json
+import pprint
 import time
 import pywt
 import tables
@@ -8,6 +8,7 @@ import vae_model
 import logging
 import datetime
 import matplotlib
+
 matplotlib.use("Agg")
 
 sys.path.append("../")
@@ -39,6 +40,7 @@ LOG.addHandler(ch)
 LOG.setLevel(logging.INFO)
 
 FS = 256.0
+PART_NUM = 2
 
 
 def main():
@@ -90,23 +92,27 @@ def main():
 
 
 def train_model(model, dirname, lr_init, decay, beta, test_patient):
-    max_epochs = 50  # 200
-    patience   = 20  # 30
+    max_epochs = 10  # 200
+    patience = 20  # 30
     batch_size = 32
     beta_start_epoch = 10
 
-    history        = CSVLogger(dirname + "/training.log")
+    history = CSVLogger(dirname + "/training.log")
     early_stopping = EarlyStopping(
         monitor="loss", patience=patience, restore_best_weights=True)
-    scheduler      = LearningRateScheduler(lambda x,y: lr_init*np.exp(-decay*x))
+    scheduler = LearningRateScheduler(lambda x, y: lr_init * np.exp(-decay * x))
     beta_annealing = AnnealingCallback(beta, beta_start_epoch, max_epochs)
 
-    train_data, train_label = build_dataset_pickle("train", test_patient)
-    valid_data, valid_label = build_dataset_pickle("valid", test_patient)
-
-    model.fit(x=[train_data, train_label], validation_data=[valid_data, valid_label],
-              epochs=max_epochs, batch_size=batch_size,
-              callbacks=[early_stopping, history, scheduler, beta_annealing])
+    all_filenames = get_all_filenames()
+    for iter in range(4):
+        for part in range(2):
+            train_data, train_label = build_dataset_pickle("train", test_patient, all_filenames, part)
+            print("Shape :{}, {}".format(train_data.shape, train_label.shape))
+            valid_data, valid_label = build_dataset_pickle("valid", test_patient, all_filenames, part)
+            print("Shape :{}, {}".format(valid_data.shape, valid_label.shape))
+            model.fit(x=[train_data, train_label], validation_data=[valid_data, valid_label],
+                      initial_epoch=part * max_epochs, epochs=(part + 1) * max_epochs, batch_size=batch_size,
+                      callbacks=[early_stopping, history, scheduler, beta_annealing])
 
     savedir = dirname + '/saved_model/'
     if not os.path.exists(savedir):
@@ -114,26 +120,60 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     model.save_weights(savedir, save_format='tf')
 
 
-def build_dataset_pickle(mode, test_patient):
-    dirname = "../temp/vae_mmd_data/{}/full/{}".format(SEG_N, mode)
-    filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if not
-                 x.startswith("chb{:02d}".format(test_patient))]
-    print("Files: {}".format(filenames))
-    X_total = np.zeros((0, SEG_N, 2))
-    y_total = np.zeros((0,))
+def build_dataset_pickle(mode, test_patient, all_filenames, part):
+    data_len = get_data_len(test_patient, mode)
+    X_total = np.zeros((data_len, SEG_N, 2))
+    y_total = np.zeros((data_len,))
+    last_pointer = 0
+    filenames = all_filenames[mode][test_patient]
+    part_size = len(filenames) // PART_NUM
+    if mode == "train":
+        filenames = filenames[part * part_size: (part + 1) * part_size]
+
+    patient_dict = {pat_num: 0 for pat_num in range(1, 25)}
     for filename in filenames:
+        pickle_name = filename.split('/')[-1]
+        pat_num = int(pickle_name[3:5])
         with open(filename, "rb") as pickle_file:
             data = pickle.load(pickle_file)
-            print("Shapes: {}, {}".format(X_total.shape, np.array(data["X"]).shape))
-            X_total = np.concatenate((X_total, np.array(data["X"])))
-            y_total = np.concatenate((y_total, np.array(data["y"])))
+            # print("Shapes: {}, {}".format(X_total.shape, np.array(data["X"]).shape))
+            patient_dict[pat_num] = patient_dict[pat_num] + np.array(data["X"]).shape[0]
+            file_data_len = np.array(data["X"]).shape[0]
+            X_total[last_pointer: last_pointer + file_data_len] = np.array(data["X"])
+            y_total[last_pointer: last_pointer + file_data_len] = np.array(data["y"])
+            last_pointer += file_data_len
 
     return X_total, y_total
 
 
+def get_data_len(test_patient, mode):
+    pat_data_len = {"train": {1: 31812, 2: 29906, 3: 31467, 4: 129617, 5: 29670, 6: 58064, 7: 56730, 8: 17986, 9: 46872,
+                              10: 41395, 11: 29482, 12: 16801, 13: 26970, 14: 21576, 15: 33273, 16: 16182, 17: 17087,
+                              18: 28440, 19: 24210, 20: 21251, 21: 26818, 22: 26970, 23: 19658, 24: 18246},
+                    "valid": {1: 4644, 2: 1798, 3: 2697, 4: 10804, 5: 5394, 6: 1981, 7: 3599, 8: 1798, 9: 14197,
+                              10: 3603,
+                              11: 1798, 12: 4501, 13: 2697, 14: 1798, 15: 2698, 16: 899, 17: 1798, 18: 3596, 19: 2697,
+                              20: 3564, 21: 2697, 22: 902, 23: 4238, 24: 899}}
+    total = sum(pat_data_len[mode].values())
+    print("Total number : {}".format(total))
+    return total - pat_data_len[mode][test_patient]
+
+
+def get_all_filenames():
+    all_filenames = {'train': {}, 'valid': {}}
+    for mode in 'train', 'valid':
+        for test_patient in range(1, 25):
+            dirname = "../temp/vae_mmd_data/{}/full/{}".format(SEG_N, mode)
+            filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if not
+            x.startswith("chb{:02d}".format(test_patient))]
+            all_filenames[mode][test_patient] = filenames
+    return all_filenames
+
+
 def build_dataset_tfrecord(mode, batch_size, test_patient):
     dirname = "../temp/vae_mmd_data/{}/LOOCV/{}".format(SEG_N, mode)
-    filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if not x.startswith("chb{:02d}".format(test_patient))]
+    filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if
+                 not x.startswith("chb{:02d}".format(test_patient))]
     print("Files: {}".format(filenames))
     dataset = tf.data.TFRecordDataset(filenames)
     dataset = dataset.map(_parse_fn)
@@ -147,23 +187,23 @@ def _parse_fn(proto):
     example = tf.io.parse_single_example(proto, parse_dict)
     X = tf.io.parse_tensor(example["channels"], out_type=tf.float32)
     y = tf.io.parse_tensor(example["label"], out_type=tf.float32)
-    X = tf.reshape(X, [SEG_N,2])  # Annoying hack needed for Keras
+    X = tf.reshape(X, [SEG_N, 2])  # Annoying hack needed for Keras
     return X, y
 
 
 class AnnealingCallback(Callback):
-    
+
     def __init__(self, beta, beta_start_epoch=3, max_epochs=200):
         self.beta = beta
         self.beta_start_epoch = beta_start_epoch
         self.max_epochs = max_epochs
 
     def on_epoch_end(self, epoch, logs=None):
-         if epoch > self.beta_start_epoch:
+        if epoch > self.beta_start_epoch:
             beta_new = min(
                 K.get_value(self.beta) + (1 / float(self.max_epochs)), 1.0)
             K.set_value(self.beta, beta_new)
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
