@@ -198,7 +198,7 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    arch = 'supervised'
+    arch = 'unsupervised24'
     beta = 0.001
     latent_dim = 16
     lr = 0.0001
@@ -225,13 +225,13 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    subdirname = "{}/{}/{}".format(dirname, SEG_LENGTH, "supervised")
+    subdirname = "{}/{}/{}".format(dirname, SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
     sessions = create_seizure_dataset(SEG_LENGTH, SF)
 
-    for test_patient in range(10):  # Loop1: cross validation
+    for test_patient in range(8):  # Loop1: cross validation
         for node in sessions.keys():   # Loop2: nodes in the dataset
             print("node: {}".format(node))
             patient_num = int(node[3:5])
@@ -296,5 +296,5 @@ class PrintLogs(tf.keras.callbacks.Callback):
 
 
 if __name__ == "__main__":
-    # tf.config.experimental.set_visible_devices([], 'GPU')
+    tf.config.experimental.set_visible_devices([], 'GPU')
     main()
