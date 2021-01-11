@@ -198,7 +198,7 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    arch = 'unsupervised24'
+    arch = 'ae_supervised'
     beta = 0.001
     latent_dim = 16
     lr = 0.0001
@@ -207,7 +207,7 @@ def main():
 
     root = "../output/vae/{}/".format(arch)
     stub = "seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}/saved_model/"
-    build_model = vae_model.build_model
+    build_model = vae_model.build_ae_model
     build_model_args = {
         "input_shape": (SEG_LENGTH, 2,),
         "enc_dimension": latent_dim,
@@ -230,10 +230,10 @@ def main():
         os.makedirs(subdirname)
 
     sessions = create_seizure_dataset(SEG_LENGTH, SF)
-
-    for test_patient in range(8):  # Loop1: cross validation
+    middle_diff = []
+    for test_patient in range(24):  # Loop1: cross validation
         for node in sessions.keys():   # Loop2: nodes in the dataset
-            print("node: {}".format(node))
+            # print("node: {}".format(node))
             patient_num = int(node[3:5])
             if test_patient != patient_num:
                 continue
@@ -255,33 +255,22 @@ def main():
             LOG.info("mmd maximum : {}".format(mmd_maximum))
             plot_mmd(mmd, mmd_maximum, y_true, node, subdirname)
 
-        # history = CSVLogger(dirname + "/training.log")
+            y_non_zero = np.where(y_true > 0, 1, 0)
+            y_diff = np.diff(y_non_zero)
+            start_points = np.where(y_diff > 0)[0]
+            stop_points = np.where(y_diff < 0)[0]
+            middle_points = (start_points + stop_points) // 2
+            LOG.info("points: {}, {}".format(start_points, stop_points))
 
+            t_diff = np.abs(middle_points - mmd_maximum[0])
+            LOG.info("Time diff : {}".format(t_diff))
+            middle_diff.append(np.min(t_diff))
 
-    # y_non_zero = np.where(y > 0, 1, 0)
-    # y_diff = np.diff(y_non_zero)
-    # start_points = np.where(y_diff > 0)[0]
-    # stop_points = np.where(y_diff < 0)[0]
-    # middle_points = (start_points + stop_points) // 2
-    # LOG.info("points: {}, {}".format(start_points, stop_points))
-
-    # plt.figure()
-    # plt.plot(mmd_corr, label="MMD")
-    # for seizure_start, seizure_stop in zip(start_points, stop_points):
-    #     plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
-    # if len(node.attrs.seizures) > 0:
-    #     plt.plot(arg_max_mmd, mmd_corr[arg_max_mmd], 'go', markersize=12)
-    # plt.savefig("{}/{}_mmd_corrected.png".format(subdirname, node._v_name))
-    # plt.close()
-    #
-    # t_diff = np.abs(middle_points - arg_max_mmd)
-    # LOG.info("Time diff : {}".format(t_diff))
-    # middle_diff.append(t_diff)
-    #
-    # plt.figure()
-    # plt.hist(middle_diff)
-    # plt.savefig("{}/hist_diff.png".format(subdirname))
-    # plt.close()
+    print(middle_diff)
+    plt.figure()
+    plt.hist(middle_diff)
+    plt.savefig("{}/hist_diff.png".format(subdirname))
+    plt.show()
 
 
 class PrintLogs(tf.keras.callbacks.Callback):
