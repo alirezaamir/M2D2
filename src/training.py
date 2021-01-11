@@ -63,7 +63,7 @@ def main():
     ==========================""".format(arch, beta, decay, latent_dim, lr)
     LOG.info("Training Model with parameters:{}".format(param_str))
 
-    build_model = vae_model.build_model
+    build_model = vae_model.build_ae_model
     root = "../output/vae/{}".format(arch)
     stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}"
     dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay, gamma, test_patient)
@@ -105,7 +105,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     beta_annealing = AnnealingCallback(beta, beta_start_epoch, max_epochs)
 
     all_filenames = get_all_filenames()
-    for iter in range(8):
+    for iter in range(6):
         for part in range(PART_NUM):
             train_data, train_label = build_dataset_pickle("train", test_patient, all_filenames, part)
             print("Shape :{}, {}".format(train_data.shape, train_label.shape))
@@ -116,7 +116,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
                       epochs=((iter * PART_NUM) + part + 1) * max_epochs,
                       batch_size=batch_size,
                       callbacks=[early_stopping, history, scheduler, beta_annealing])
-            train_data, valid_data = np.zeros(0), np.zeros(0)  # Realise the variable to empty the memory
+            train_data, valid_data = np.zeros(0), np.zeros(0)  # Release the variable to empty the memory
 
     savedir = dirname + '/saved_model/'
     if not os.path.exists(savedir):

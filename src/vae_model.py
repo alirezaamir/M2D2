@@ -10,13 +10,12 @@ from tensorflow.keras import models, layers, losses
 from tensorflow.keras.utils import plot_model
 
 
-def build_model(input_shape=None, 
-                enc_dimension=None, 
+def build_model(input_shape=None,
+                enc_dimension=None,
                 beta=None,
                 gamma=None,
                 optim=None,
                 FS=None):
-
     ii = layers.Input(shape=(input_shape))
     x = ii
     ii_permutation = K.permute_dimensions(ii, (0, 2, 1))
@@ -29,7 +28,7 @@ def build_model(input_shape=None,
         x = layers.Conv1D(8, 3, padding="same", activation="relu")(x)
         x = layers.Conv1D(8, 3, padding="same", activation="relu")(x)
         x = layers.MaxPooling1D(2)(x)
-    
+
     shape = K.int_shape(x)
     x = layers.Flatten()(x)
     mu = layers.Dense(enc_dimension, activation="linear", name="mu")(x)
@@ -48,7 +47,7 @@ def build_model(input_shape=None,
     y_class = classifier(encoder(ii)[2])
 
     latent_inputs = layers.Input(shape=(enc_dimension,), name='z_sampling')
-    q = layers.Dense(shape[1]*shape[2], activation="relu")(latent_inputs)
+    q = layers.Dense(shape[1] * shape[2], activation="relu")(latent_inputs)
     q = layers.Reshape((shape[1], shape[2]))(q)
 
     for _ in range(num_conv_layers):
@@ -89,17 +88,67 @@ def build_model(input_shape=None,
     model = models.Model(inputs=[ii, y_true], outputs=x_hat)
     model.add_loss(cost)
     model.compile(optimizer=optim)
-    
+
     # model.metrics.append(recons_cost)
     # model.metrics_names.append("recons_cost")
 
     # model.metrics.append(freq_cost)
     # model.metrics_names.append("freq_cost")
-    
+
     model.metrics.append(divergence)
     model.metrics_names.append("mmd_elbo")
 
     return model, decoder
+
+
+def build_ae_model(input_shape=None,
+                   enc_dimension=None,
+                   beta=None,
+                   gamma=None,
+                   optim=None,
+                   FS=None):
+    ii = layers.Input(shape=(input_shape))
+    x = ii
+
+    num_conv_layers = 3
+    for _ in range(num_conv_layers):
+        x = layers.Conv1D(8, 3, padding="same", activation="relu")(x)
+        x = layers.Conv1D(8, 3, padding="same", activation="relu")(x)
+        x = layers.MaxPooling1D(2)(x)
+
+    shape = K.int_shape(x)
+    x = layers.Flatten()(x)
+    z = layers.Dense(enc_dimension, activation="linear", name="z")(x)
+
+    #
+    y_true = layers.Input(shape=(1), name="true_label")
+    # cl_dense1 = layers.Dense(enc_dimension, activation="relu", name="classifier_dense1")(z)
+    # cl_dense2 = layers.Dense(1, activation=None, name="classifier_dense2")(cl_dense1)
+
+    q = layers.Dense(shape[1] * shape[2], activation="relu")(z)
+    q = layers.Reshape((shape[1], shape[2]))(q)
+
+    for _ in range(num_conv_layers):
+        q = layers.Conv1D(8, 3, padding="same", activation="relu")(q)
+        q = layers.UpSampling1D(size=2)(q)
+
+    dec_output = layers.Conv1D(
+        2, 3, padding="same", activation="linear", name="reconstruction")(q)
+    x_hat = dec_output
+
+    recons_cost = K.mean(losses.mse(ii, x_hat))
+
+    # classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=cl_dense2))
+
+    cost = recons_cost #+ 0.1 * classification_cost  # + beta*divergence + gamma*freq_cost
+
+    model = models.Model(inputs=[ii, y_true], outputs=x_hat)
+    model.add_loss(cost)
+    model.compile(optimizer=optim)
+
+    encoder = models.Model(inputs= model.input, outputs=model.get_layer('z').output)
+
+    return model, encoder
 
 
 def sampling(args):
@@ -111,5 +160,6 @@ def sampling(args):
 
 
 if __name__ == '__main__':
-    model = build_model(input_shape=(1024,2,), enc_dimension=100, beta=0, optim='adam', gamma=100, FS= 256)
-    plot_model(model[0], '../output/VAE_model.png', show_shapes=True, show_layer_names=False)
+    tf.config.experimental.set_visible_devices([], 'GPU')
+    model = build_ae_model(input_shape=(1024, 2,), enc_dimension=16, beta=0, optim='adam', gamma=100, FS=256)
+    plot_model(model[0], '../output/AE_model.png', show_shapes=True, show_layer_names=False)
