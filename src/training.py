@@ -63,7 +63,7 @@ def main():
     ==========================""".format(arch, beta, decay, latent_dim, lr)
     LOG.info("Training Model with parameters:{}".format(param_str))
 
-    build_model = vae_model.build_ae_model
+    build_model = vae_model.build_model
     root = "../output/vae/{}".format(arch)
     stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}"
     dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay, gamma, test_patient)
@@ -179,7 +179,7 @@ def get_all_filenames():
     all_filenames = {'train': {}, 'valid': {}}
     for mode in 'train', 'valid':
         for test_patient in range(1, 25):
-            dirname = "../temp/vae_mmd_data/{}/full/{}".format(SEG_N, mode)
+            dirname = "../temp/vae_mmd_data/{}/full_normal/{}".format(SEG_N, mode)
             filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if not
             x.startswith("chb{:02d}".format(test_patient))]
             all_filenames[mode][test_patient] = filenames

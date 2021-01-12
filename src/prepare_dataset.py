@@ -3,11 +3,12 @@ import pprint
 import tables
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.preprocessing import  MinMaxScaler
+from sklearn.preprocessing import  scale
 from params import *
 import os
 import pickle
 import json
+from scipy import signal
 
 np.random.seed(13298)
 FS = 256
@@ -41,15 +42,19 @@ def compare2hdf(signals):
     print(np.where(db_signal[:, -1] > 0))
 
 
-def save_pickle(data, S, dirname, record_name, window_size):
+def save_pickle(data, dirname, record_name, window_size):
     filename = "{}/{}.pickle".format(dirname, record_name.split('/')[-1][:-4])
     output_dict = {"X": [], "y": []}
-    X = S.transform(data[:, :-1])
+    # X = S.transform(data[:, :-1])
+    X = data[:, :-1]
+    sos = signal.butter(3, 50, fs=FS, btype="lowpass", output="sos")
+    X = signal.sosfilt(sos, X, axis=1)
     with open(filename, 'wb') as pickle_file:
         for ix in range(window_size, X.shape[0], window_size):
             Xw = X[ix - window_size:ix, :]
+            Xw_normalized = scale(Xw, axis=1)
             y = 0 if np.sum(data[:, -1][ix - window_size:ix]) == 0 else 1
-            output_dict["X"].append(Xw)
+            output_dict["X"].append(Xw_normalized)
             output_dict["y"].append(y)
         pickle.dump(output_dict, pickle_file)
 
@@ -77,7 +82,7 @@ def read_edf_file(record_name, seizure_list):
 
 
 def main():
-    S = MinMaxScaler()
+    # S = MinMaxScaler()
     seizure_list = json.load(open("../input/seizures.json"))
     modes = {"train": [], "test": [], "valid": []}
     with open('../input/chbmit/1.0.0/RECORDS', 'r') as f:
@@ -88,17 +93,17 @@ def main():
         record_name = rec.replace('\n', '')
         m = np.random.choice(["train", "valid"], p=[0.9, 0.1])
         modes[m].append(record_name)
-        eeg_data = read_edf_file(record_name, seizure_list)
-        if m == "train":
-            S.partial_fit(eeg_data[:, :-1])
+        # eeg_data = read_edf_file(record_name, seizure_list)
+        # if m == "train":
+        #     S.partial_fit(eeg_data[:, :-1])
 
     for m in modes:
-        dirname = "../temp/vae_mmd_data/{}/{}/{}".format(SEG_N, "full", m)
+        dirname = "../temp/vae_mmd_data/{}/{}/{}".format(SEG_N, "full_normal", m)
         if not os.path.exists(dirname):
             os.makedirs(dirname)
         for record_name in modes[m]:
             data = read_edf_file(record_name, seizure_list)
-            save_pickle(data, S, dirname, record_name, SEG_N)
+            save_pickle(data, dirname, record_name, SEG_N)
 
 
 if __name__ == '__main__':
