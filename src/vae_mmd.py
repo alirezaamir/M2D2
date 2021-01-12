@@ -15,6 +15,7 @@ from sklearn.manifold import TSNE
 from utils import create_seizure_dataset
 import pickle
 from tensorflow.keras.callbacks import Callback, EarlyStopping, CSVLogger, LearningRateScheduler
+from params import SEG_N
 
 sys.path.append("../")
 LOG = logging.getLogger(os.path.basename(__file__))
@@ -198,7 +199,7 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    arch = 'ae_supervised'
+    arch = 'supervised24'
     beta = 0.001
     latent_dim = 16
     lr = 0.0001
@@ -207,7 +208,7 @@ def main():
 
     root = "../output/vae/{}/".format(arch)
     stub = "seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}/saved_model/"
-    build_model = vae_model.build_ae_model
+    build_model = vae_model.build_model
     build_model_args = {
         "input_shape": (SEG_LENGTH, 2,),
         "enc_dimension": latent_dim,
@@ -220,7 +221,7 @@ def main():
     model, _ = build_model(**build_model_args)
 
     kernel = polynomial_kernel
-    kernel_name = "polynomial_seizures"
+    kernel_name = "rbf"
     dirname = "../temp/vae_mmd/{}".format(kernel_name)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
@@ -229,26 +230,34 @@ def main():
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
-    sessions = create_seizure_dataset(SEG_LENGTH, SF)
+    # sessions2 = create_seizure_dataset(SEG_LENGTH, SF)
     middle_diff = []
-    for test_patient in range(24):  # Loop1: cross validation
+    for test_patient in range(24):
+        sessions = build_dataset_pickle(test_patient=test_patient)
         for node in sessions.keys():   # Loop2: nodes in the dataset
             # print("node: {}".format(node))
             patient_num = int(node[3:5])
             if test_patient != patient_num:
                 continue
 
-            # Load specific weights for the model
+            LOG.info("session name: {}".format(test_patient))
+            X = sessions[node]['data']
+            LOG.info("session number: {}".format(len(X)))
+            y_true = sessions[node]['label']
+
+            if np.sum(y_true) == 0:
+                continue
+
+            LOG.info("Session {}\nmin:{}, max: {}".format(node, np.min(X), np.max(X)))
+
+            # Load the specific weights for the model
             dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma, test_patient)
             if not os.path.exists(dirname):
                 print("Model does not exist in {}".format(dirname))
                 exit()
             model.load_weights(dirname)
             intermediate_model = tf.keras.models.Model(inputs=model.inputs, outputs=model.layers[1].output)
-            LOG.info("session name: {}".format(test_patient))
-            X = sessions[node]['data']
-            LOG.info("session number: {}".format(len(X)))
-            y_true = sessions[node]['label']
+
             latent = intermediate_model.predict(X)[2]
             K = kernel(latent)
             mmd_maximum, mmd = get_changing_points(K, 4)
@@ -271,6 +280,23 @@ def main():
     plt.hist(middle_diff)
     plt.savefig("{}/hist_diff.png".format(subdirname))
     plt.show()
+
+
+def build_dataset_pickle(test_patient):
+    dataset = {}
+    for mode in ["train" , "valid"]:
+        dirname = "../temp/vae_mmd_data/{}/full_non_normal/{}".format(SEG_N, mode)
+        filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if x.startswith("chb{:02d}".format(test_patient))]
+        for filename in filenames:
+            with open(filename, "rb") as pickle_file:
+                pickle_name = filename.split('/')[-1]
+                name = pickle_name[:8]
+                data = pickle.load(pickle_file)
+                x = np.array(data["X"])
+                y = np.array(data["y"])
+                dataset[name] = {'data': x, 'label': y}
+
+    return dataset
 
 
 class PrintLogs(tf.keras.callbacks.Callback):
