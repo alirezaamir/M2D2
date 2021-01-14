@@ -52,7 +52,7 @@ def save_pickle(data, dirname, record_name, window_size):
     with open(filename, 'wb') as pickle_file:
         for ix in range(window_size, X.shape[0], window_size):
             Xw = X[ix - window_size:ix, :]
-            Xw_normalized = scale(Xw, axis=1)
+            Xw_normalized = scale(Xw, axis=0)
             y = 0 if np.sum(data[:, -1][ix - window_size:ix]) == 0 else 1
             output_dict["X"].append(Xw_normalized)
             output_dict["y"].append(y)

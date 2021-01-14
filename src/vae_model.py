@@ -81,9 +81,9 @@ def build_model(input_shape=None,
     logqz_x = log_normal_pdf(z, mu, sigma)
     divergence = K.mean(-logpz + logqz_x)
 
-    classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=y_class))
+    # classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=y_class))
     #
-    cost = recons_cost + beta*divergence + gamma*freq_cost + 0.1 * classification_cost
+    cost = recons_cost + beta*divergence + gamma*freq_cost #+ 0.1 * classification_cost
 
     model = models.Model(inputs=[ii, y_true], outputs=x_hat)
     model.add_loss(cost)

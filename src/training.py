@@ -93,7 +93,7 @@ def main():
 
 
 def train_model(model, dirname, lr_init, decay, beta, test_patient):
-    max_epochs = 5  # 200
+    max_epochs = 4  # 200
     patience = 20  # 30
     batch_size = 32
     beta_start_epoch = 10
@@ -105,7 +105,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     beta_annealing = AnnealingCallback(beta, beta_start_epoch, max_epochs)
 
     all_filenames = get_all_filenames()
-    for iter in range(6):
+    for iter in range(5):
         for part in range(PART_NUM):
             train_data, train_label = build_dataset_pickle("train", test_patient, all_filenames, part)
             print("Shape :{}, {}".format(train_data.shape, train_label.shape))
@@ -116,7 +116,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
                       epochs=((iter * PART_NUM) + part + 1) * max_epochs,
                       batch_size=batch_size,
                       callbacks=[early_stopping, history, scheduler, beta_annealing])
-            train_data, valid_data = np.zeros(0), np.zeros(0)  # Release the variable to empty the memory
+            del train_data, valid_data  # clear the variable to empty the memory
 
     savedir = dirname + '/saved_model/'
     if not os.path.exists(savedir):

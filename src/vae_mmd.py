@@ -199,7 +199,7 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    arch = 'supervised24'
+    arch = 'vae_supervised'
     beta = 0.001
     latent_dim = 16
     lr = 0.0001
@@ -232,7 +232,8 @@ def main():
 
     # sessions2 = create_seizure_dataset(SEG_LENGTH, SF)
     middle_diff = []
-    for test_patient in range(24):
+    z_dict = {}
+    for test_patient in range(11):
         sessions = build_dataset_pickle(test_patient=test_patient)
         for node in sessions.keys():   # Loop2: nodes in the dataset
             # print("node: {}".format(node))
@@ -259,6 +260,8 @@ def main():
             intermediate_model = tf.keras.models.Model(inputs=model.inputs, outputs=model.layers[1].output)
 
             latent = intermediate_model.predict(X)[2]
+            z_dict[node] = latent
+
             K = kernel(latent)
             mmd_maximum, mmd = get_changing_points(K, 4)
             LOG.info("mmd maximum : {}".format(mmd_maximum))
@@ -275,6 +278,9 @@ def main():
             LOG.info("Time diff : {}".format(t_diff))
             middle_diff.append(np.min(t_diff))
 
+    with open("../output/z_16.pickle", "wb") as pickle_file:
+        pickle.dump(z_dict, pickle_file)
+
     print(middle_diff)
     plt.figure()
     plt.hist(middle_diff)
@@ -285,7 +291,7 @@ def main():
 def build_dataset_pickle(test_patient):
     dataset = {}
     for mode in ["train" , "valid"]:
-        dirname = "../temp/vae_mmd_data/{}/full_non_normal/{}".format(SEG_N, mode)
+        dirname = "../temp/vae_mmd_data/{}/full_normal/{}".format(SEG_N, mode)
         filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if x.startswith("chb{:02d}".format(test_patient))]
         for filename in filenames:
             with open(filename, "rb") as pickle_file:
@@ -311,5 +317,5 @@ class PrintLogs(tf.keras.callbacks.Callback):
 
 
 if __name__ == "__main__":
-    tf.config.experimental.set_visible_devices([], 'GPU')
+    # tf.config.experimental.set_visible_devices([], 'GPU')
     main()
