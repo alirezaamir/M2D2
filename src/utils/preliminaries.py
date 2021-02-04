@@ -13,7 +13,7 @@ np.random.seed(13298)
 def main():
     S = MinMaxScaler()
     modes = {"train": [], "test": [], "valid": []}
-    in_path = "../input/eeg_data_temples2.h5"
+    in_path = "../../input/eeg_data_temples2.h5"
     with tables.open_file(in_path) as h5_file:
         for node in h5_file.walk_nodes("/", "CArray"):
             # print("node name: {}".format(node._v_name[3:5]))

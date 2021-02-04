@@ -1,12 +1,10 @@
 import os
 import sys
-from utils import vae_model
 import logging
 import matplotlib
 import json
 
 matplotlib.use("Agg")
-
 sys.path.append("../")
 
 import numpy as np
@@ -15,6 +13,7 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 
 from utils.params import SEG_N
+from utils import vae_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import Callback
 
@@ -117,7 +116,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     model.save_weights(savedir, save_format='tf')
 
 
-def  build_dataset_pickle(mode, test_patient, all_filenames):
+def build_dataset_pickle(mode, test_patient, all_filenames):
     # filenames = split_list(all_filenames[mode][test_patient], wanted_parts=PART_NUM)
     filenames = np.random.permutation(all_filenames[mode][test_patient])
     number_files = len(filenames) // PART_NUM if mode == "train" else len(filenames)

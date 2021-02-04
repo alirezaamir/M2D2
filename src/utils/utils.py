@@ -65,7 +65,7 @@ def create_seizure_dataset(length, sf):
     :return: a dictionary containing the nodes with seizures
     """
     sessions_dict = {}
-    with tables.open_file("../input/eeg_data_temples2.h5") as h5_file:
+    with tables.open_file("../../input/eeg_data_temples2.h5") as h5_file:
         for node in h5_file.walk_nodes("/", "CArray"):
             if len(node.attrs.seizures) < 1:
                 continue

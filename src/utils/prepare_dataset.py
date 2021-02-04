@@ -24,7 +24,7 @@ def get_TxFx_channels(dict_list):
 
 
 def compare2hdf(signals):
-    in_path = "../input/eeg_data_temples2.h5"
+    in_path = "../../input/eeg_data_temples2.h5"
     db_signal = []
     with tables.open_file(in_path) as h5_file:
         for node in h5_file.walk_nodes("/", "CArray"):
@@ -82,9 +82,9 @@ def read_edf_file(record_name, seizure_list):
 
 def main():
     # S = MinMaxScaler()
-    seizure_list = json.load(open("../input/seizures.json"))
+    seizure_list = json.load(open("../../input/seizures.json"))
     modes = {"train": [], "test": [], "valid": []}
-    with open('../input/chbmit/1.0.0/RECORDS', 'r') as f:
+    with open('../../input/chbmit/1.0.0/RECORDS', 'r') as f:
         lines = f.readlines()
         records = lines
 

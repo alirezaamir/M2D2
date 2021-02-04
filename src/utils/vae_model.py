@@ -158,4 +158,4 @@ def sampling(args):
 if __name__ == '__main__':
     tf.config.experimental.set_visible_devices([], 'GPU')
     model = build_ae_model(input_shape=(1024, 2,), enc_dimension=16, beta=0, optim='adam', gamma=100, FS=256)
-    plot_model(model[0], '../output/AE_model.png', show_shapes=True, show_layer_names=False)
+    plot_model(model[0], '../../output/AE_model.png', show_shapes=True, show_layer_names=False)
