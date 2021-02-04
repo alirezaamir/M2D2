@@ -1,10 +1,8 @@
 import pyedflib
-import pprint
 import tables
-import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.preprocessing import  scale
-from params import *
+from utils.params import *
 import os
 import pickle
 import json

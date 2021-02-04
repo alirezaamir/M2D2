@@ -1,11 +1,7 @@
-import numpy as np
-import pandas as pd
-
 import tensorflow as tf
 import tensorflow.keras.backend as K
 
-from losses import mmd_loss, log_normal_pdf
-from tensorflow import keras
+from utils.losses import log_normal_pdf
 from tensorflow.keras import models, layers, losses
 from tensorflow.keras.utils import plot_model
 

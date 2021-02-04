@@ -1,21 +1,16 @@
 import os
 import sys
-import tables
 import logging
 import numpy as np
-from scipy import signal, integrate
-import vae_model
-import autoencoder_model
-from tensorflow.keras.optimizers import Adam, RMSprop
+from utils import vae_model
+from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
-from sklearn.metrics.pairwise import rbf_kernel, polynomial_kernel, linear_kernel
+from sklearn.metrics.pairwise import polynomial_kernel
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-from utils import create_seizure_dataset
 import pickle
-from tensorflow.keras.callbacks import Callback, EarlyStopping, CSVLogger, LearningRateScheduler
-from params import SEG_N
+from utils.params import SEG_N
 
 sys.path.append("../")
 LOG = logging.getLogger(os.path.basename(__file__))

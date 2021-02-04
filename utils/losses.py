@@ -24,7 +24,7 @@ The following domain adaptation loss functions are defined:
 from functools import partial
 import tensorflow as tf
 
-import utils
+from utils import utils
 import numpy as np
 
 

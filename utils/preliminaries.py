@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 import pickle
 
-from params import *
+from utils.params import *
 from sklearn.preprocessing import MinMaxScaler
 
 np.random.seed(13298)

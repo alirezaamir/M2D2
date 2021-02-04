@@ -7,7 +7,7 @@ temp
 .vscode
 lsqr_example
 test_code
-__pycache__
+*__pycache__
 output
 *.idea
 input

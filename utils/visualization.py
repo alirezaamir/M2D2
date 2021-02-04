@@ -2,8 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import tensorflow as tf
-from vae_mmd import build_dataset_pickle
-import vae_model
+from utils import vae_model
 import pickle
 
 SF = 256

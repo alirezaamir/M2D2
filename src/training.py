@@ -1,12 +1,7 @@
 import os
 import sys
-import pprint
-import time
-import pywt
-import tables
-import vae_model
+from utils import vae_model
 import logging
-import datetime
 import matplotlib
 import json
 
@@ -17,18 +12,11 @@ sys.path.append("../")
 import numpy as np
 import pickle
 import tensorflow as tf
-import matplotlib.pyplot as plt
 import tensorflow.keras.backend as K
 
-from scipy import signal
-from params import SEG_N
-from sklearn.decomposition import PCA
+from utils.params import SEG_N
 from tensorflow.keras.optimizers import Adam
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics.pairwise import rbf_kernel
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from tensorflow.keras.callbacks import Callback, EarlyStopping, CSVLogger, LearningRateScheduler
+from tensorflow.keras.callbacks import Callback
 
 np.random.seed(13298)
 
