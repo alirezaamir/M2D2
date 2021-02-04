@@ -1,6 +1,8 @@
 import tensorflow as tf
 import tensorflow.keras.backend as K
+import numpy as np
 
+from utils.mmd_layer import MMDLayer
 from utils.losses import log_normal_pdf
 from tensorflow.keras import models, layers, losses
 from tensorflow.keras.utils import plot_model
@@ -145,6 +147,14 @@ def build_ae_model(input_shape=None,
     encoder = models.Model(inputs=model.input, outputs=model.get_layer('z').output)
 
     return model, encoder
+
+
+def get_mmd_model(latent_dim, state_len):
+    initial_state = np.zeros((state_len, latent_dim))
+    z_input = tf.keras.layers.Input(shape=(None, 1, latent_dim))
+    bidirectional = tf.keras.layers.Bidirectional(MMDLayer(initial_state, go_backwards=False))(z_input)
+    model = tf.keras.models.Model(inputs=z_input, outputs=bidirectional)
+    return model
 
 
 def sampling(args):
