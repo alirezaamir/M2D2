@@ -28,7 +28,6 @@ LOG.setLevel(logging.INFO)
 SF = 256
 SEG_LENGTH = 1024
 EXCLUDED_SIZE = 15
-AE_EPOCHS = 120
 interval_len = 4
 
 
@@ -163,7 +162,7 @@ def plot_mmd(mmd, argmax_mmd, y_true, name, dir):
     plt.xlabel("Chunk index")
     plt.ylabel("MMD")
     plt.title("Seizure detection for patient {}".format(name))
-    plt.savefig("{}/{}_mmd_corrected.png".format(dir, name))
+    plt.savefig("{}/{}_norm.png".format(dir, name))
     plt.close()
 
 
@@ -183,24 +182,13 @@ def plot_mu_sigma(mu, sigma, y_true, name, dir ):
     plt.close()
 
 
-def plot_input(x, name,  dir):
-    plt.figure(figsize = (27, 5))
-    x = np.ndarray.flatten(x[:,:,0])
-    length = 45
-    plt.plot(np.linspace(0,length, SF*length), x[:SF*length], label="EEG")
-    plt.xlabel("Time (sec)", fontsize=16)
-    plt.title("EEG signal for patient {}".format(name), fontsize=18)
-    plt.savefig("{}/{}_input.png".format(dir, name), transparent=True)
-    plt.close()
-
-
 def main():
     dirname = "../temp/vae_mmd"
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    arch = 'vae_supervised'
-    beta = 0.001
+    arch = 'vae_unsupervised'
+    beta = 1e-05
     latent_dim = 16
     lr = 0.0001
     decay = 0.5
@@ -221,7 +209,7 @@ def main():
     model, _ = build_model(**build_model_args)
 
     kernel = polynomial_kernel
-    kernel_name = "rbf"
+    kernel_name = "polynomial_seizures"
     dirname = "../temp/vae_mmd/{}".format(kernel_name)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
@@ -233,7 +221,7 @@ def main():
     # sessions2 = create_seizure_dataset(SEG_LENGTH, SF)
     middle_diff = []
     z_dict = {}
-    for test_patient in range(11):
+    for test_patient in range(1,25):
         sessions = build_dataset_pickle(test_patient=test_patient)
         for node in sessions.keys():   # Loop2: nodes in the dataset
             # print("node: {}".format(node))
@@ -249,7 +237,7 @@ def main():
             if np.sum(y_true) == 0:
                 continue
 
-            LOG.info("Session {}\nmin:{}, max: {}".format(node, np.min(X), np.max(X)))
+            LOG.info("Session {}\nmean:{}, std: {}".format(node, np.mean(X), np.std(X)))
 
             # Load the specific weights for the model
             dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma, test_patient)
@@ -278,8 +266,8 @@ def main():
             LOG.info("Time diff : {}".format(t_diff))
             middle_diff.append(np.min(t_diff))
 
-    with open("../output/z_16.pickle", "wb") as pickle_file:
-        pickle.dump(z_dict, pickle_file)
+    # with open("../output/z_16.pickle", "wb") as pickle_file:
+    #     pickle.dump(z_dict, pickle_file)
 
     print(middle_diff)
     plt.figure()

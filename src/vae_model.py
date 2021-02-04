@@ -82,8 +82,8 @@ def build_model(input_shape=None,
     divergence = K.mean(-logpz + logqz_x)
 
     # classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=y_class))
-    #
-    cost = recons_cost + beta*divergence + gamma*freq_cost #+ 0.1 * classification_cost
+
+    cost = recons_cost + beta*divergence #+ gamma*freq_cost + 0.1 * classification_cost
 
     model = models.Model(inputs=[ii, y_true], outputs=x_hat)
     model.add_loss(cost)
@@ -146,7 +146,7 @@ def build_ae_model(input_shape=None,
     model.add_loss(cost)
     model.compile(optimizer=optim)
 
-    encoder = models.Model(inputs= model.input, outputs=model.get_layer('z').output)
+    encoder = models.Model(inputs=model.input, outputs=model.get_layer('z').output)
 
     return model, encoder
 
