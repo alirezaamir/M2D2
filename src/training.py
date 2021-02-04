@@ -63,7 +63,7 @@ def main():
     ==========================""".format(arch, beta, decay, latent_dim, lr)
     LOG.info("Training Model with parameters:{}".format(param_str))
 
-    build_model = vae_model.build_model
+    build_model = vae_model.build_ae_model
     root = "../output/vae/{}".format(arch)
     stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}"
     dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay, gamma, test_patient)
@@ -98,25 +98,30 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     batch_size = 32
     beta_start_epoch = 10
 
-    history = CSVLogger(dirname + "/training.log")
-    early_stopping = EarlyStopping(
-        monitor="loss", patience=patience, restore_best_weights=True)
-    scheduler = LearningRateScheduler(lambda x, y: lr_init * np.exp(-decay * x))
-    beta_annealing = AnnealingCallback(beta, beta_start_epoch, max_epochs)
+    # history = CSVLogger(dirname + "/training.log")
+    # early_stopping = EarlyStopping(
+    #     monitor="loss", patience=patience, restore_best_weights=True)
+    # scheduler = LearningRateScheduler(lambda x, y: lr_init * np.exp(-decay * x))
+    # beta_annealing = AnnealingCallback(beta, beta_start_epoch, max_epochs)
 
     all_filenames = get_all_filenames()
+    savedir = dirname + '/saved_model/'
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
+
     for iter in range(5):
-        for part in range(PART_NUM):
-            train_data, train_label = build_dataset_pickle("train", test_patient, all_filenames, part)
-            print("Shape :{}, {}".format(train_data.shape, train_label.shape))
-            valid_data, valid_label = build_dataset_pickle("valid", test_patient, all_filenames, part)
-            print("Shape :{}, {}".format(valid_data.shape, valid_label.shape))
-            model.fit(x=[train_data, train_label], validation_data=[valid_data, valid_label],
-                      initial_epoch=((iter * PART_NUM) + part) * max_epochs,
-                      epochs=((iter * PART_NUM) + part + 1) * max_epochs,
-                      batch_size=batch_size,
-                      callbacks=[early_stopping, history, scheduler, beta_annealing])
-            del train_data, valid_data  # clear the variable to empty the memory
+        train_data, train_label = build_dataset_pickle("train", test_patient, all_filenames)
+        print("Shape :{}, {}".format(train_data.shape, train_label.shape))
+        valid_data, valid_label = build_dataset_pickle("valid", test_patient, all_filenames)
+        print("Shape :{}, {}".format(valid_data.shape, valid_label.shape))
+        model.fit(x=[train_data, train_label], validation_data=[valid_data, valid_label],
+                  initial_epoch=iter * max_epochs,
+                  epochs=(iter + 1) * max_epochs,
+                  batch_size=batch_size,
+                  # callbacks=[early_stopping, history, scheduler, beta_annealing]
+        )
+        del train_data, valid_data  # clear the variable to empty the memory
+        model.save_weights(savedir, save_format='tf')
 
     savedir = dirname + '/saved_model/'
     if not os.path.exists(savedir):
@@ -124,20 +129,17 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     model.save_weights(savedir, save_format='tf')
 
 
-def build_dataset_pickle(mode, test_patient, all_filenames, part):
-    filenames = split_list(all_filenames[mode][test_patient], wanted_parts=PART_NUM)
-    if mode == "train":
-        data_len = get_data_len(filenames[part])
-        X_total = np.zeros((data_len, SEG_N, 2))
-        y_total = np.zeros((data_len,))
-    else:
-        data_len = get_data_len(all_filenames[mode][test_patient])
-        X_total = np.zeros((data_len, SEG_N, 2))
-        y_total = np.zeros((data_len,))
+def  build_dataset_pickle(mode, test_patient, all_filenames):
+    # filenames = split_list(all_filenames[mode][test_patient], wanted_parts=PART_NUM)
+    filenames = np.random.permutation(all_filenames[mode][test_patient])
+    number_files = len(filenames) // PART_NUM if mode == "train" else len(filenames)
+    data_len = get_data_len(filenames[:number_files])
+    X_total = np.zeros((data_len, SEG_N, 2))
+    y_total = np.zeros((data_len,))
 
     last_pointer = 0
     # patient_dict = {pat_num: 0 for pat_num in range(1, 25)}
-    for filename in filenames[part]:
+    for filename in filenames[:number_files]:
         with open(filename, "rb") as pickle_file:
             data = pickle.load(pickle_file)
             file_data_len = np.array(data["X"]).shape[0]
@@ -222,4 +224,5 @@ class AnnealingCallback(Callback):
 
 
 if __name__ == "__main__":
+    # tf.config.experimental.set_visible_devices([], 'GPU')
     main()
