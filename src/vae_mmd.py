@@ -218,6 +218,14 @@ def main():
     z_dict = {}
     for test_patient in range(1,25):
         sessions = build_dataset_pickle(test_patient=test_patient)
+        # Load the specific weights for the model
+        dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma, test_patient)
+        if not os.path.exists(dirname):
+            print("Model does not exist in {}".format(dirname))
+            exit()
+        model.load_weights(dirname)
+        intermediate_model = tf.keras.models.Model(inputs=model.inputs, outputs=model.layers[1].output)
+
         for node in sessions.keys():   # Loop2: nodes in the dataset
             # print("node: {}".format(node))
             patient_num = int(node[3:5])
@@ -233,14 +241,6 @@ def main():
                 continue
 
             LOG.info("Session {}\nmean:{}, std: {}".format(node, np.mean(X), np.std(X)))
-
-            # Load the specific weights for the model
-            dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma, test_patient)
-            if not os.path.exists(dirname):
-                print("Model does not exist in {}".format(dirname))
-                exit()
-            model.load_weights(dirname)
-            intermediate_model = tf.keras.models.Model(inputs=model.inputs, outputs=model.layers[1].output)
 
             latent = intermediate_model.predict(X)[2]
             z_dict[node] = latent
