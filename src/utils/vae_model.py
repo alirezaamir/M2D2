@@ -60,10 +60,10 @@ def build_model(input_shape=None,
     x_hat_permutation = K.permute_dimensions(x_hat, (0, 2, 1))
     x_hat_fft = tf.signal.rfft(x_hat_permutation)
     fft_permutation = K.permute_dimensions(x_hat_fft, (0, 2, 1))
-    x_hat_psd = 1/(FS * input_shape[0]) * tf.math.square(fft_permutation)
+    x_hat_psd = 1 / (FS * input_shape[0]) * tf.math.square(fft_permutation)
 
     recons_cost = K.mean(losses.mse(ii, x_hat))
-    freq_cost = K.mean(losses.mse(input_psd[:,1:,:], x_hat_psd[:,1:,:]))
+    freq_cost = K.mean(losses.mse(input_psd[:, 1:, :], x_hat_psd[:, 1:, :]))
     freq_cost = K.abs(freq_cost)
 
     # z_actual = tf.random.normal(tf.stack([200, enc_dimension]))
@@ -81,7 +81,7 @@ def build_model(input_shape=None,
 
     # classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=y_class))
 
-    cost = recons_cost + beta*divergence #+ gamma*freq_cost + 0.1 * classification_cost
+    cost = recons_cost + beta * divergence  # + gamma*freq_cost + 0.1 * classification_cost
 
     model = models.Model(inputs=[ii, y_true], outputs=x_hat)
     model.add_loss(cost)
@@ -96,7 +96,7 @@ def build_model(input_shape=None,
     model.metrics.append(divergence)
     model.metrics_names.append("mmd_elbo")
 
-    return model, decoder
+    return model, encoder
 
 
 def build_ae_model(input_shape=None,
@@ -138,7 +138,7 @@ def build_ae_model(input_shape=None,
 
     # classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=cl_dense2))
 
-    cost = recons_cost #+ 0.1 * classification_cost  # + beta*divergence + gamma*freq_cost
+    cost = recons_cost  # + 0.1 * classification_cost  # + beta*divergence + gamma*freq_cost
 
     model = models.Model(inputs=[ii, y_true], outputs=x_hat)
     model.add_loss(cost)
@@ -149,11 +149,27 @@ def build_ae_model(input_shape=None,
     return model, encoder
 
 
-def get_mmd_model(latent_dim, state_len):
+def get_mmd_model(state_len=None,
+                  latent_dim=None,
+                  signal_len = None):
     initial_state = np.zeros((state_len, latent_dim))
-    z_input = tf.keras.layers.Input(shape=(None, 1, latent_dim))
-    bidirectional = tf.keras.layers.Bidirectional(MMDLayer(initial_state, go_backwards=False))(z_input)
-    model = tf.keras.models.Model(inputs=z_input, outputs=bidirectional)
+    input_signal = tf.keras.layers.Input(shape=(None, signal_len, 2))
+    input_random = tf.keras.layers.Input(shape=(None, latent_dim))
+    x = input_signal
+    num_conv_layers = 3
+    for i in range(num_conv_layers):
+        x = layers.TimeDistributed(layers.Conv1D(8, 3, padding="same", activation="relu"), name="conv1d_{}_1".format(i+1))(x)
+        x = layers.TimeDistributed(layers.Conv1D(8, 3, padding="same", activation="relu"), name="conv1d_{}_2".format(i+1))(x)
+        x = layers.TimeDistributed(layers.MaxPooling1D(2), name="pool_{}".format(i+1))(x)
+
+    x = layers.TimeDistributed(layers.Flatten(), name='flatten')(x)
+    mu = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="mu"), name='mu')(x)
+    sigma = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="sigma"), name='sigma')(x)
+    z = layers.Lambda(
+        simple_sampling, output_shape=(latent_dim,), name="latents")([mu, sigma, input_random])
+    bidirectional = tf.keras.layers.Bidirectional(MMDLayer(initial_state, go_backwards=False))(z)
+    dense = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(1, activation=None), name='final_dense')(bidirectional)
+    model = tf.keras.models.Model(inputs=[input_signal, input_random], outputs=dense)
     return model
 
 
@@ -163,6 +179,13 @@ def sampling(args):
     dim = K.int_shape(z_mean)[1]
     epsilon = K.random_normal(shape=(batch, dim))
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
+
+
+def simple_sampling(args):
+    z_mean, z_log_var, epsilon = args
+    z =  epsilon * K.exp(0.5 * z_log_var) + z_mean
+    z_expanded = K.expand_dims(z, axis=2)
+    return z_expanded
 
 
 if __name__ == '__main__':
