@@ -2,18 +2,17 @@ import numpy as np
 import pickle
 
 
-def dataset_training(mode, test_patient, all_filenames, part_num = 4, max_len = 899):
-    # filenames = split_list(all_filenames[mode][test_patient], wanted_parts=PART_NUM)
-    filenames = np.random.permutation(all_filenames[mode][test_patient])
-    number_files = len(filenames) // part_num if mode == "train" else len(filenames)
+def dataset_training(mode, test_patient, all_filenames, max_len = 899):
     X_total = []
     y_total = []
 
-    for filename in filenames[:number_files]:
+    for filename in all_filenames[mode][test_patient]:
         with open(filename, "rb") as pickle_file:
             data = pickle.load(pickle_file)
             x = np.array(data["X"])
             y = np.array(data["y"])
+            if np.sum(y) == 0:
+                continue
             y = np.expand_dims(y, -1)
             if x.shape[0] == max_len:
                 X_total.append(x)

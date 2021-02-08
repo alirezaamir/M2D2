@@ -24,14 +24,14 @@ The following domain adaptation loss functions are defined:
 from functools import partial
 import tensorflow as tf
 
-from utils import utils
+from utils import func
 import numpy as np
 
 
 ################################################################################
 # SIMILARITY LOSS
 ################################################################################
-def maximum_mean_discrepancy(x, y, kernel=utils.gaussian_kernel_matrix):
+def maximum_mean_discrepancy(x, y, kernel=func.gaussian_kernel_matrix):
     r"""Computes the Maximum Mean Discrepancy (MMD) of two samples: x and y.
   Maximum Mean Discrepancy (MMD) is a distance-measure between the samples of
   the distributions of x and y. Here we use the kernel two sample estimate
@@ -75,7 +75,7 @@ def mmd_loss(source_samples, target_samples, scope=None):
         1e3, 1e4, 1e5, 1e6
     ]
     gaussian_kernel = partial(
-        utils.gaussian_kernel_matrix, sigmas=tf.constant(sigmas))
+        func.gaussian_kernel_matrix, sigmas=tf.constant(sigmas))
 
     loss_value = maximum_mean_discrepancy(
         source_samples, target_samples, kernel=gaussian_kernel)
