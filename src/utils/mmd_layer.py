@@ -6,13 +6,14 @@ from tensorflow.keras.layers import Layer
 
 
 class MMDLayer(tf.keras.layers.Layer):
-    def __init__(self, initial_state, go_backwards, return_sequences=True, return_state=False, **kwargs):
+    def __init__(self, initial_state, mask_th, go_backwards, return_sequences=True, return_state=False, **kwargs):
         self.initial_state = tf.constant(initial_state, dtype=tf.float32)
         self.state_len = initial_state.shape[0]
         self.latent_dim = initial_state.shape[1]
         self.go_backwards = go_backwards
         self.return_sequences = return_sequences
         self.return_state = return_state
+        self.mask_th = mask_th
         # self.go_backward = backward
         super(MMDLayer, self).__init__(**kwargs)
 
@@ -42,6 +43,13 @@ class MMDLayer(tf.keras.layers.Layer):
         gamma = tf.multiply(-1/self.latent_dim, sum)
         coeff = tf.add(1.0, gamma)
         poly = tf.pow(coeff, 3)
+        time_steps = tf.range(start=0, limit=self.state_len, dtype=tf.float32)
+        sigmoid = tf.sigmoid(time_steps - self.mask_th)
+        masked_inside = tf.multiply(poly, 1-sigmoid)
+        inside_sum = tf.reduce_sum(masked_inside, axis=1, keepdims=True)
+        masked_outside = tf.multiply(poly, sigmoid)
+        outside_sum = tf.reduce_sum(masked_outside, axis=1, keepdims=True)
+        inout = tf.concat([inside_sum, outside_sum], axis=1)
         # rbf = tf.exp(gamma)
 
         # Updating the state
@@ -49,7 +57,7 @@ class MMDLayer(tf.keras.layers.Layer):
         sliced = tf.slice(concatenated, [0, 0, 0], [1, self.state_len, self.latent_dim])
         d_t = tf.squeeze(sliced, axis=0)
 
-        return poly, d_t
+        return inout, d_t
 
     def get_config(self):
         cfg = super().get_config()
@@ -58,7 +66,8 @@ class MMDLayer(tf.keras.layers.Layer):
                 initial_state=self.initial_state,
                 go_backwards= self.go_backwards,
                 return_sequences = self.return_sequences,
-                return_state = self.return_state
+                return_state = self.return_state,
+                mask_th = self.mask_th
             )
         )
         return cfg

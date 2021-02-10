@@ -50,7 +50,7 @@ def main():
 
     print(encoder.summary())
 
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/gaussian_label".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/frozen_v3_gru_free".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -69,7 +69,7 @@ def main():
             exit()
         model.load_weights(load_dirname)
 
-        vae_mmd_model = vae_model.get_mmd_model(state_len=300, latent_dim=latent_dim, signal_len=SEG_LENGTH)
+        vae_mmd_model = vae_model.get_mmd_model(state_len=300, latent_dim=latent_dim, signal_len=SEG_LENGTH, trainable_vae=False)
 
         print(vae_mmd_model.summary())
         for layer_num in range(13):
@@ -128,5 +128,5 @@ def main():
 
 
 if __name__ == "__main__":
-    tf.config.experimental.set_visible_devices([], 'GPU')
+    # tf.config.experimental.set_visible_devices([], 'GPU')
     main()

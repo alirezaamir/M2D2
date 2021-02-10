@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import tensorflow as tf
-from utils import vae_model
+import utils.vae_model as vae_model
 import pickle
 
 SF = 256
@@ -21,28 +21,44 @@ def visualize_inout(test_patient):
         data = pickle.load(pickle_file)
         X_total = np.array(data['X'])
         y_total = np.array(data['y'])
-        print("X shape: {}".format(X_total.shape))
+
+        model = get_model(test_patient)
+
+        epilepsy_samples = np.where(y_total != 0 )[0]
+        epilepsy_rand_sample = int(np.median(epilepsy_samples))
+        middle_sample = np.expand_dims(X_total[epilepsy_rand_sample], 0)
+        epilepsy_predict = model.predict(middle_sample)
 
         sample = np.random.randint(0, X_total.shape[0])
-        plt.subplot(211)
-        plt.plot(X_total[sample][:, 0])
-        plt.subplot(212)
         sample_in = np.expand_dims(X_total[sample], 0)
-        model = get_model(test_patient)
         predict = model.predict(sample_in)
-        print("Predict shape: {}".format(predict.shape))
+
+        plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.3, hspace=0.3)
+        plt.subplot(221)
+        plt.plot(X_total[sample][:, 0])
+        plt.title("Raw sample {}".format(sample))
+        plt.subplot(223)
+        plt.title("Recons. sample {}".format(sample))
         plt.plot(predict[0, :, 0])
+        plt.subplot(222)
+        plt.plot(X_total[epilepsy_rand_sample][:, 0])
+        plt.title("Raw Ep. sample {}".format(epilepsy_rand_sample))
+        plt.subplot(224)
+        plt.title("Recons. Ep. sample {}".format(epilepsy_rand_sample))
+        plt.plot(epilepsy_predict[0, :, 0])
+
+
         plt.show()
 
 
 def get_model(test_patient):
-    beta = 1e-5
+    beta = 1e-05
     latent_dim = 16
     lr = 0.0001
     decay = 0.5
     gamma = 0.0
 
-    root = "../output/vae/{}/".format(arch)
+    root = "../../output/vae/{}/".format(arch)
     stub = "seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}/saved_model/"
     build_model = vae_model.build_model
     build_model_args = {
@@ -71,7 +87,7 @@ def generate_z_space(all_filename, test_patient):
     if model is None:
         return
 
-    dirname = "../temp/z_norm/{}".format(arch)
+    dirname = "../../temp/z_norm/{}".format(arch)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
@@ -122,7 +138,7 @@ def get_epilepsy_files():
     for test_patient in range(1, 25):
         all_filenames[test_patient] = []
         for mode in ['train', 'valid']:
-            dirname = "../temp/vae_mmd_data/{}/full_normal/{}".format(SEG_LENGTH, mode)
+            dirname = "../../temp/vae_mmd_data/{}/full_normal/{}".format(SEG_LENGTH, mode)
             filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if
                          x.startswith("chb{:02d}".format(test_patient))]
             for filename in filenames:
@@ -137,8 +153,8 @@ def get_epilepsy_files():
 
 if __name__ == '__main__':
     tf.config.experimental.set_visible_devices([], 'GPU')
-    # visualize_inout(test_patient=1)
-    all_filename = get_epilepsy_files()
-    for patient in range(1,25):
-        print("Model {}".format(patient))
-        generate_z_space(all_filename, test_patient=patient)
+    visualize_inout(test_patient=1)
+    # all_filename = get_epilepsy_files()
+    # for patient in range(1,25):
+    #     print("Model {}".format(patient))
+    #     generate_z_space(all_filename, test_patient=patient)
