@@ -30,6 +30,13 @@ class MMDLayer(tf.keras.layers.Layer):
 
         return kernel
 
+    def get_masked_sum(self, input_array, th):
+        time_steps = tf.range(start=0, limit=self.state_len, dtype=tf.float32)
+        sigmoid = tf.sigmoid(time_steps - th)
+        masked_inside = tf.multiply(input_array, 1 - sigmoid)
+        inside_sum = tf.reduce_sum(masked_inside, axis=1, keepdims=True)
+        return inside_sum
+
     def step(self, input, states):
         d_t1 = states
         z_t = input
@@ -43,13 +50,15 @@ class MMDLayer(tf.keras.layers.Layer):
         gamma = tf.multiply(-1/self.latent_dim, sum)
         coeff = tf.add(1.0, gamma)
         poly = tf.pow(coeff, 3)
-        time_steps = tf.range(start=0, limit=self.state_len, dtype=tf.float32)
-        sigmoid = tf.sigmoid(time_steps - self.mask_th)
-        masked_inside = tf.multiply(poly, 1-sigmoid)
-        inside_sum = tf.reduce_sum(masked_inside, axis=1, keepdims=True)
-        masked_outside = tf.multiply(poly, sigmoid)
-        outside_sum = tf.reduce_sum(masked_outside, axis=1, keepdims=True)
-        inout = tf.concat([inside_sum, outside_sum], axis=1)
+
+        inside1 = self.get_masked_sum(poly, 1)
+        inside2 = self.get_masked_sum(poly, 2)
+        inside4 = self.get_masked_sum(poly, 4)
+        inside8 = self.get_masked_sum(poly, 8)
+        inside16 = self.get_masked_sum(poly, 16)
+        inside1000 = self.get_masked_sum(poly, 1024)
+
+        inout = tf.concat([inside1, inside2, inside4, inside8, inside16, inside1000], axis=1)
         # rbf = tf.exp(gamma)
 
         # Updating the state
