@@ -152,10 +152,11 @@ def build_ae_model(input_shape=None,
 def get_mmd_model(state_len=None,
                   latent_dim=None,
                   signal_len=None,
+                  seq_len = None,
                   trainable_vae=True):
     initial_state = np.zeros((state_len, latent_dim))
-    input_signal = tf.keras.layers.Input(shape=(None, signal_len, 2))
-    input_random = tf.keras.layers.Input(shape=(None, latent_dim))
+    input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 2))
+    input_random = tf.keras.layers.Input(shape=(seq_len, latent_dim))
     x = input_signal
     num_conv_layers = 3
     for i in range(num_conv_layers):
@@ -174,8 +175,8 @@ def get_mmd_model(state_len=None,
         simple_sampling, output_shape=(latent_dim,), name="latents")([mu, sigma, input_random])
     bidirectional = tf.keras.layers.Bidirectional(MMDLayer(initial_state, mask_th=6, go_backwards=False))(z)
     gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=20, return_sequences=True))(bidirectional)
-    dense1 = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(latent_dim, activation='relu'), name='dense1')(gru)
-    final_dense = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(1, activation=None), name='final_dense')(dense1)
+    dense1 = tf.keras.layers.Dense(latent_dim, activation='relu', name='dense1')(gru)
+    final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense1)
     model = tf.keras.models.Model(inputs=[input_signal, input_random], outputs=final_dense)
     return model
 
