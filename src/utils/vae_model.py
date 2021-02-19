@@ -154,7 +154,6 @@ def get_mmd_model(state_len=None,
                   signal_len=None,
                   seq_len = None,
                   trainable_vae=True):
-    initial_state = np.zeros((state_len, latent_dim))
     input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 2))
     input_random = tf.keras.layers.Input(shape=(seq_len, latent_dim))
     x = input_signal
@@ -173,7 +172,7 @@ def get_mmd_model(state_len=None,
                                    name='sigma')(x)
     z = layers.Lambda(
         simple_sampling, output_shape=(latent_dim,), name="latents")([mu, sigma, input_random])
-    bidirectional = tf.keras.layers.Bidirectional(MMDLayer(initial_state, mask_th=6, go_backwards=False))(z)
+    bidirectional = tf.keras.layers.Bidirectional(MMDLayer(state_len, latent_dim, mask_th=6, go_backwards=False))(z)
     gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=100, return_sequences=True))(bidirectional)
     dense1 = tf.keras.layers.Dense(latent_dim, activation='relu', name='dense1')(gru)
     final_dense = tf.keras.layers.Dense(1, activation=None, name='final_dense')(dense1)

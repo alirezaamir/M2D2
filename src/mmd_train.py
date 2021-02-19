@@ -57,7 +57,7 @@ def main():
 
     middle_diff = []
     all_filenames = get_all_filenames()
-    for test_patient in range(1,4):
+    for test_patient in range(1,25):
         train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN)
         val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN)
 
@@ -88,7 +88,12 @@ def main():
         val_random = np.random.randn(val_data.shape[0], val_data.shape[1], 16)
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mse')
         vae_mmd_model.fit(x=[train_data, train_random], y=train_label,
-                          validation_data=([val_data, val_random], val_label), batch_size=1, epochs=10)
+                          validation_data=([val_data, val_random], val_label), batch_size=1, epochs=50)
+
+        savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
+        if not os.path.exists(savedir):
+            os.makedirs(savedir)
+        vae_mmd_model.save(savedir)
 
         for node in sessions.keys():   # Loop2: nodes in the dataset
             # print("node: {}".format(node))

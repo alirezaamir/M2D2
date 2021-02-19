@@ -6,10 +6,9 @@ from tensorflow.keras.layers import Layer
 
 
 class MMDLayer(tf.keras.layers.Layer):
-    def __init__(self, initial_state, mask_th, go_backwards, return_sequences=True, return_state=False, **kwargs):
-        self.initial_state = tf.constant(initial_state, dtype=tf.float32)
-        self.state_len = initial_state.shape[0]
-        self.latent_dim = initial_state.shape[1]
+    def __init__(self, state_len, latent_dim, mask_th, go_backwards, return_sequences=True, return_state=False, **kwargs):
+        self.state_len = state_len
+        self.latent_dim = latent_dim
         self.go_backwards = go_backwards
         self.return_sequences = return_sequences
         self.return_state = return_state
@@ -24,7 +23,7 @@ class MMDLayer(tf.keras.layers.Layer):
         return input_shape[0], input_shape[1], self.state_len
 
     def call(self, x, mask=None):
-        d_t1 = self.initial_state
+        d_t1 = tf.zeros(shape=(self.state_len, self.latent_dim), dtype=tf.float32)
         z_t = x
         _, kernel, d_t = tf.keras.backend.rnn(self.step, z_t, [d_t1], go_backwards=self.go_backwards)
 
@@ -74,7 +73,8 @@ class MMDLayer(tf.keras.layers.Layer):
         cfg = super().get_config()
         cfg.update(
             dict(
-                initial_state=self.initial_state,
+                state_len = self.state_len,
+                latent_dim = self.latent_dim,
                 go_backwards= self.go_backwards,
                 return_sequences = self.return_sequences,
                 return_state = self.return_state,
