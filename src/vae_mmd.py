@@ -26,18 +26,6 @@ EXCLUDED_SIZE = 15
 interval_len = 4
 
 
-def get_PCA(x):
-    pca = PCA(n_components=2)
-    principalComponents = pca.fit_transform(x)
-    return principalComponents
-
-
-def get_TSNE(x):
-    tsne = TSNE(n_components=2)
-    x_embedded = tsne.fit_transform(x)
-    return x_embedded
-
-
 def get_interval_mmd(K_mat):
     mmd = []
     N = 2 * interval_len
@@ -55,18 +43,6 @@ def get_interval_mmd(K_mat):
             ((2 / float(N * M)) * Kxy)
         ))
     return np.array(mmd)
-
-
-def get_mmd_corrected(mmd):
-    ws = []
-    mmd_corr = np.zeros(mmd.size)
-    N = mmd.shape[0] - 1
-    for ix in range(1, mmd_corr.size):
-        w = (N / float(ix * (N - ix)))
-        ws.append(w)
-        mmd_corr[ix] = mmd[ix] - w * mmd.max()
-
-    return mmd_corr
 
 
 def find_original_index(original_index_list, new_index, K_len):
@@ -108,37 +84,6 @@ def get_changing_points(K_mat, steps):
     return changing_point_list, initial_mmd
 
 
-def get_mmd(kernel, latent, return_mmd= False):
-    K = kernel(latent)
-    mmd = []
-    input_length = latent.shape[0]
-    for N in range(1, input_length):
-        M = input_length - N
-        Kxx = K[:N, :N].sum()
-        Kxy = K[:N, N:].sum()
-        Kyy = K[N:, N:].sum()
-        mmd.append(np.sqrt(
-            ((1 / float(N * N)) * Kxx) +
-            ((1 / float(M * M)) * Kyy) -
-            ((2 / float(N * M)) * Kxy)
-        ))
-
-    ws = []
-    mmd = np.array(mmd)
-    mmd_corr = np.zeros(mmd.size)
-    N = input_length - 1
-    for ix in range(1, mmd_corr.size):
-        w = (N / float(ix * (N - ix)))
-        ws.append(w)
-        mmd_corr[ix] = mmd[ix] - w * mmd.max()
-
-    arg_max_mmd = np.argmax(mmd_corr[EXCLUDED_SIZE:-EXCLUDED_SIZE]) + EXCLUDED_SIZE
-    if return_mmd:
-        return arg_max_mmd, mmd_corr
-    else:
-        return arg_max_mmd
-
-
 def plot_mmd(mmd, argmax_mmd, y_true, name, dir):
 
     y_non_zero = np.where(y_true > 0, 1, 0)
@@ -158,22 +103,6 @@ def plot_mmd(mmd, argmax_mmd, y_true, name, dir):
     plt.ylabel("MMD")
     plt.title("Seizure detection for patient {}".format(name))
     plt.savefig("{}/{}_norm.png".format(dir, name))
-    plt.close()
-
-
-def plot_mu_sigma(mu, sigma, y_true, name, dir ):
-    y_non_zero = np.where(y_true > 0, 1, 0)
-    y_diff = np.diff(y_non_zero)
-    start_points = np.where(y_diff > 0)[0]
-    stop_points = np.where(y_diff < 0)[0]
-
-    plt.figure()
-    plt.plot(sigma, label="Sigma")
-    for seizure_start, seizure_stop in zip(start_points, stop_points):
-        plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.3)
-    plt.title("Sigma for patient {}".format(name))
-    plt.ylabel("Sigma")
-    plt.savefig("{}/{}_sigma.png".format(dir, name))
     plt.close()
 
 
