@@ -51,7 +51,7 @@ def main():
 
     print(encoder.summary())
 
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/bbox_reg_v6".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/classification_v7".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -61,8 +61,10 @@ def main():
         train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN)
         val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN)
 
-        train_label = np.expand_dims(train_label, -1)
-        val_label = np.expand_dims(val_label, -1)
+        # train_label = np.expand_dims(train_label, -1)
+        # val_label = np.expand_dims(val_label, -1)
+        train_label = tf.keras.utils.to_categorical(train_label, num_classes=SEQ_LEN)
+        val_label = tf.keras.utils.to_categorical(val_label, num_classes=SEQ_LEN)
 
         sessions = test_dataset(test_patient)
 
@@ -74,7 +76,7 @@ def main():
         model.load_weights(load_dirname)
 
         vae_mmd_model = vae_model.get_mmd_model(state_len=300, latent_dim=latent_dim, signal_len=SEG_LENGTH,
-                                                seq_len=None, trainable_vae=False)
+                                                seq_len=SEQ_LEN, trainable_vae=False)
 
         print(vae_mmd_model.summary())
         for layer_num in range(13):
@@ -84,9 +86,9 @@ def main():
         print("input shape: {}".format(train_data.shape))
         train_random = np.random.randn(train_data.shape[0], train_data.shape[1], 16)
         val_random = np.random.randn(val_data.shape[0], val_data.shape[1], 16)
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mse')
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='categorical_crossentropy')
         vae_mmd_model.fit(x=[train_data, train_random], y=train_label,
-                          validation_data=([val_data, val_random], val_label), batch_size=1, epochs=20)
+                          validation_data=([val_data, val_random], val_label), batch_size=1, epochs=100)
 
         for node in sessions.keys():   # Loop2: nodes in the dataset
             # print("node: {}".format(node))
@@ -98,6 +100,9 @@ def main():
             X = sessions[node]['data']
             LOG.info("session number: {}".format(len(X)))
             y_true = sessions[node]['label']
+            if y_true.shape[0] != SEQ_LEN:
+                LOG.info("Error in sequence length: {}".format(y_true.shape[0]))
+                continue
 
             if np.sum(y_true) == 0:
                 continue
@@ -107,9 +112,9 @@ def main():
             # y = np.expand_dims(y, 0)
             input_random = np.random.randn(X.shape[0], X.shape[1], 16)
             mmd_predicted = vae_mmd_model.predict([X, input_random])
-            print("Predict : {}".format(mmd_predicted))
-            # mmd_maximum = [np.argmax(mmd_predicted)]
-            # plot_mmd(mmd_predicted[0,:,0], mmd_maximum, y_true, node, subdirname)
+            print("Predict : {}".format(mmd_predicted.shape))
+            mmd_maximum = [np.argmax(mmd_predicted)]
+            plot_mmd(mmd_predicted[0,:,0], mmd_maximum, y_true, node, subdirname)
 
             y_non_zero = np.where(y_true > 0, 1, 0)
             y_diff = np.diff(y_non_zero)
@@ -117,8 +122,8 @@ def main():
             stop_points = np.where(y_diff < 0)[0]
             middle_points = (start_points + stop_points) // 2
             LOG.info("points: {}".format(middle_points))
-            proportional_middle = middle_points/y_true.shape[0]
-            t_diff = np.abs(proportional_middle - mmd_predicted)
+
+            t_diff = np.abs(middle_points - mmd_maximum[0])
             LOG.info("Time diff : {}".format(t_diff))
             middle_diff.append(np.min(t_diff))
 
