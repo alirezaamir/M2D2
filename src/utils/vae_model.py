@@ -180,7 +180,7 @@ def get_mmd_model(state_len=None,
     flatten = tf.keras.layers.Flatten()(final_dense)
     softmax = tf.keras.layers.Softmax()(flatten)
 
-    model = tf.keras.models.Model(inputs=[input_signal, input_random], outputs=softmax)
+    model = tf.keras.models.Model(inputs=[input_signal, input_random], outputs=final_dense)
     return model
 
 

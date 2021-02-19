@@ -35,7 +35,8 @@ class MMDLayer(tf.keras.layers.Layer):
         sigmoid = tf.sigmoid(time_steps - th)
         masked_inside = tf.multiply(input_array, 1 - sigmoid)
         inside_sum = tf.reduce_sum(masked_inside, axis=1, keepdims=True)
-        return inside_sum
+        average = tf.divide(inside_sum, th)
+        return average
 
     def step(self, input, states):
         d_t1 = states
@@ -54,11 +55,12 @@ class MMDLayer(tf.keras.layers.Layer):
         inside1 = self.get_masked_sum(poly, 1)
         inside2 = self.get_masked_sum(poly, 2)
         inside4 = self.get_masked_sum(poly, 4)
+        inside6 = self.get_masked_sum(poly, 6)
         inside8 = self.get_masked_sum(poly, 8)
         inside16 = self.get_masked_sum(poly, 16)
         inside1000 = self.get_masked_sum(poly, 1024)
 
-        inout = tf.concat([inside1, inside2, inside4, inside8, inside16, inside1000], axis=1)
+        inout = tf.concat([inside1, inside2, inside4, inside6, inside8, inside16, inside1000], axis=1)
         # rbf = tf.exp(gamma)
 
         # Updating the state

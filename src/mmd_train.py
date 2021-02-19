@@ -51,20 +51,20 @@ def main():
 
     print(encoder.summary())
 
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/classification_v7".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/average_mmd_v8".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
     middle_diff = []
     all_filenames = get_all_filenames()
-    for test_patient in range(1,25):
+    for test_patient in range(1,4):
         train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN)
         val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN)
 
         # train_label = np.expand_dims(train_label, -1)
         # val_label = np.expand_dims(val_label, -1)
-        train_label = tf.keras.utils.to_categorical(train_label, num_classes=SEQ_LEN)
-        val_label = tf.keras.utils.to_categorical(val_label, num_classes=SEQ_LEN)
+        # train_label = tf.keras.utils.to_categorical(train_label, num_classes=SEQ_LEN)
+        # val_label = tf.keras.utils.to_categorical(val_label, num_classes=SEQ_LEN)
 
         sessions = test_dataset(test_patient)
 
@@ -76,7 +76,7 @@ def main():
         model.load_weights(load_dirname)
 
         vae_mmd_model = vae_model.get_mmd_model(state_len=300, latent_dim=latent_dim, signal_len=SEG_LENGTH,
-                                                seq_len=SEQ_LEN, trainable_vae=False)
+                                                seq_len=None, trainable_vae=False)
 
         print(vae_mmd_model.summary())
         for layer_num in range(13):
@@ -86,9 +86,9 @@ def main():
         print("input shape: {}".format(train_data.shape))
         train_random = np.random.randn(train_data.shape[0], train_data.shape[1], 16)
         val_random = np.random.randn(val_data.shape[0], val_data.shape[1], 16)
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='categorical_crossentropy')
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mse')
         vae_mmd_model.fit(x=[train_data, train_random], y=train_label,
-                          validation_data=([val_data, val_random], val_label), batch_size=1, epochs=100)
+                          validation_data=([val_data, val_random], val_label), batch_size=1, epochs=10)
 
         for node in sessions.keys():   # Loop2: nodes in the dataset
             # print("node: {}".format(node))
@@ -100,9 +100,9 @@ def main():
             X = sessions[node]['data']
             LOG.info("session number: {}".format(len(X)))
             y_true = sessions[node]['label']
-            if y_true.shape[0] != SEQ_LEN:
-                LOG.info("Error in sequence length: {}".format(y_true.shape[0]))
-                continue
+            # if y_true.shape[0] != SEQ_LEN:
+            #     LOG.info("Error in sequence length: {}".format(y_true.shape[0]))
+            #     continue
 
             if np.sum(y_true) == 0:
                 continue
