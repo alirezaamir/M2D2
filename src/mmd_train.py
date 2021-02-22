@@ -24,7 +24,7 @@ SF = 256
 SEG_LENGTH = 1024
 EXCLUDED_SIZE = 15
 interval_len = 4
-SEQ_LEN = 899
+SEQ_LEN = 449
 
 
 def main():
@@ -51,7 +51,7 @@ def main():
 
     print(encoder.summary())
 
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/average_mmd_v8".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/30min_v9".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -65,8 +65,6 @@ def main():
         # val_label = np.expand_dims(val_label, -1)
         # train_label = tf.keras.utils.to_categorical(train_label, num_classes=SEQ_LEN)
         # val_label = tf.keras.utils.to_categorical(val_label, num_classes=SEQ_LEN)
-
-        sessions = test_dataset(test_patient)
 
         # Load the specific weights for the model
         load_dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma, test_patient)
@@ -88,52 +86,15 @@ def main():
         val_random = np.random.randn(val_data.shape[0], val_data.shape[1], 16)
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mse')
         vae_mmd_model.fit(x=[train_data, train_random], y=train_label,
-                          validation_data=([val_data, val_random], val_label), batch_size=1, epochs=50)
+                          validation_data=([val_data, val_random], val_label), batch_size=1, epochs=25)
 
         savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
         if not os.path.exists(savedir):
             os.makedirs(savedir)
         vae_mmd_model.save(savedir)
 
-        for node in sessions.keys():   # Loop2: nodes in the dataset
-            # print("node: {}".format(node))
-            patient_num = int(node[3:5])
-            if test_patient != patient_num:
-                continue
-
-            LOG.info("session name: {}".format(test_patient))
-            X = sessions[node]['data']
-            LOG.info("session number: {}".format(len(X)))
-            y_true = sessions[node]['label']
-            # if y_true.shape[0] != SEQ_LEN:
-            #     LOG.info("Error in sequence length: {}".format(y_true.shape[0]))
-            #     continue
-
-            if np.sum(y_true) == 0:
-                continue
-
-            X = np.expand_dims(X, 0)
-            # y = np.expand_dims(y_true, -1)
-            # y = np.expand_dims(y, 0)
-            input_random = np.random.randn(X.shape[0], X.shape[1], 16)
-            mmd_predicted = vae_mmd_model.predict([X, input_random])
-            print("Predict : {}".format(mmd_predicted.shape))
-            mmd_maximum = [np.argmax(mmd_predicted)]
-            plot_mmd(mmd_predicted[0,:,0], mmd_maximum, y_true, node, subdirname)
-
-            y_non_zero = np.where(y_true > 0, 1, 0)
-            y_diff = np.diff(y_non_zero)
-            start_points = np.where(y_diff > 0)[0]
-            stop_points = np.where(y_diff < 0)[0]
-            middle_points = (start_points + stop_points) // 2
-            LOG.info("points: {}".format(middle_points))
-
-            t_diff = np.abs(middle_points - mmd_maximum[0])
-            LOG.info("Time diff : {}".format(t_diff))
-            middle_diff.append(np.min(t_diff))
-
-    # with open("../output/z_16.pickle", "wb") as pickle_file:
-    #     pickle.dump(z_dict, pickle_file)
+        diffs = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname)
+        middle_diff += diffs
 
     print(middle_diff)
     plt.figure()
@@ -142,6 +103,73 @@ def main():
     plt.show()
 
 
+def inference(test_patient, trained_model, subdirname):
+    sessions = test_dataset(test_patient)
+    middle_diff = []
+
+    if trained_model is None:
+        save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
+        trained_model = tf.keras.models.load_model(save_path)
+
+    for node in sessions.keys():
+        patient_num = int(node[3:5])
+        if test_patient != patient_num:
+            continue
+
+        LOG.info("session name: {}".format(test_patient))
+        X = sessions[node]['data']
+        LOG.info("session number: {}".format(len(X)))
+        y_true = sessions[node]['label']
+
+        if np.sum(y_true) == 0:
+            continue
+
+        for section in range(X.shape[0]//SEQ_LEN):
+            y_true_section = y_true[SEQ_LEN*section:SEQ_LEN*(section+1)]
+
+            if np.sum(y_true_section) == 0:
+                continue
+
+            X_section = X[SEQ_LEN*section:SEQ_LEN*(section+1)]
+            X_section = np.expand_dims(X_section, 0)
+
+            input_random = np.random.randn(X_section.shape[0], X_section.shape[1], 16)
+            mmd_predicted = trained_model.predict([X_section, input_random])
+            print("Predict : {}".format(mmd_predicted.shape))
+            mmd_maximum = [np.argmax(mmd_predicted)]
+            name = "{}_{}".format(node, section)
+            plot_mmd(mmd_predicted[0, :, 0], mmd_maximum, y_true_section, name, subdirname)
+
+            y_non_zero = np.where(y_true_section > 0, 1, 0)
+            y_non_zero = np.concatenate((y_non_zero, [0]))
+            # For sections which have seizure at the end or start of the section
+            y_non_zero = np.concatenate(([0], y_non_zero,))
+            y_diff = np.diff(y_non_zero)
+            start_points = np.where(y_diff > 0)[0]
+            stop_points = np.where(y_diff < 0)[0]
+
+            accepted_points = []
+            for start, stop in zip(start_points, stop_points):
+                accepted_points += range(start, stop)
+            middle_points = (start_points + stop_points) // 2
+            LOG.info("start: {}, stop: {}\npoints: {}".format(start_points, stop_points, accepted_points))
+
+            t_diff = np.abs(accepted_points - mmd_maximum[0])
+            LOG.info("Time diff : {}".format(np.min(t_diff)))
+            middle_diff.append(np.min(t_diff))
+    return middle_diff
+
+
+def get_results():
+    arch = 'vae_unsupervised'
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/30min_v9".format(SEG_LENGTH, arch)
+    diffs = []
+    for pat in range(1, 25):
+        diffs += inference(pat, None, subdirname)
+    print("Differences: {}\nMedian: {}".format(diffs, np.median(diffs)))
+
+
 if __name__ == "__main__":
     # tf.config.experimental.set_visible_devices([], 'GPU')
-    main()
+    # main()
+    get_results()
