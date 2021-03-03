@@ -24,7 +24,7 @@ SF = 256
 SEG_LENGTH = 1024
 EXCLUDED_SIZE = 15
 interval_len = 4
-SEQ_LEN = 449
+SEQ_LEN = 899
 
 
 def main():
@@ -51,7 +51,7 @@ def main():
 
     print(encoder.summary())
 
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/30min_v9".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/20min_v14".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -74,7 +74,7 @@ def main():
         model.load_weights(load_dirname)
 
         vae_mmd_model = vae_model.get_mmd_model(state_len=300, latent_dim=latent_dim, signal_len=SEG_LENGTH,
-                                                seq_len=None, trainable_vae=False)
+                                                seq_len=None, trainable_vae=True)
 
         print(vae_mmd_model.summary())
         for layer_num in range(13):
@@ -82,11 +82,12 @@ def main():
             vae_mmd_model.layers[layer_num].set_weights(weights)
 
         print("input shape: {}".format(train_data.shape))
-        train_random = np.random.randn(train_data.shape[0], train_data.shape[1], 16)
-        val_random = np.random.randn(val_data.shape[0], val_data.shape[1], 16)
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mse')
-        vae_mmd_model.fit(x=[train_data, train_random], y=train_label,
-                          validation_data=([val_data, val_random], val_label), batch_size=1, epochs=25)
+        for iter in range(8):
+            train_random = np.random.randn(train_data.shape[0], train_data.shape[1], 16)
+            val_random = np.random.randn(val_data.shape[0], val_data.shape[1], 16)
+            vae_mmd_model.fit(x=[train_data, train_random], y=train_label,
+                              validation_data=([val_data, val_random], val_label), batch_size=1, epochs=6)
 
         savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
         if not os.path.exists(savedir):
@@ -111,6 +112,15 @@ def inference(test_patient, trained_model, subdirname):
         save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
         trained_model = tf.keras.models.load_model(save_path)
 
+        vae_mmd_model = vae_model.get_mmd_model(state_len=300, latent_dim=16, signal_len=SEG_LENGTH,
+                                                seq_len=None, trainable_vae=True)
+
+        for layer_num in range(len(vae_mmd_model.layers)):
+            weights = trained_model.layers[layer_num].get_weights()
+            vae_mmd_model.layers[layer_num].set_weights(weights)
+    else:
+        vae_mmd_model = trained_model
+
     for node in sessions.keys():
         patient_num = int(node[3:5])
         if test_patient != patient_num:
@@ -124,17 +134,20 @@ def inference(test_patient, trained_model, subdirname):
         if np.sum(y_true) == 0:
             continue
 
-        for section in range(X.shape[0]//SEQ_LEN):
-            y_true_section = y_true[SEQ_LEN*section:SEQ_LEN*(section+1)]
+        for section in [-1]: # range(X.shape[0]//SEQ_LEN):  # [-1]:
+            # y_true_section = y_true[SEQ_LEN*section:SEQ_LEN*(section+1)]
+            #
+            # if np.sum(y_true_section) == 0:
+            #     continue
+            #
+            # X_section = X[SEQ_LEN*section:SEQ_LEN*(section+1)]
 
-            if np.sum(y_true_section) == 0:
-                continue
-
-            X_section = X[SEQ_LEN*section:SEQ_LEN*(section+1)]
+            X_section = X
+            y_true_section = y_true
             X_section = np.expand_dims(X_section, 0)
 
             input_random = np.random.randn(X_section.shape[0], X_section.shape[1], 16)
-            mmd_predicted = trained_model.predict([X_section, input_random])
+            mmd_predicted = vae_mmd_model.predict([X_section, input_random])
             print("Predict : {}".format(mmd_predicted.shape))
             mmd_maximum = [np.argmax(mmd_predicted)]
             name = "{}_{}".format(node, section)
@@ -162,11 +175,11 @@ def inference(test_patient, trained_model, subdirname):
 
 def get_results():
     arch = 'vae_unsupervised'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/30min_v9".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/20min_v14".format(SEG_LENGTH, arch)
     diffs = []
     for pat in range(1, 25):
         diffs += inference(pat, None, subdirname)
-    print("Differences: {}\nMedian: {}".format(diffs, np.median(diffs)))
+    print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
 
 
 if __name__ == "__main__":
