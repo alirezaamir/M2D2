@@ -13,6 +13,7 @@ class MMDLayer(tf.keras.layers.Layer):
         self.return_sequences = return_sequences
         self.return_state = return_state
         self.mask_th = mask_th
+        # self.init_state = tf.constant(np.zeros(shape=(state_len, latent_dim)), dtype=tf.float32)
         # self.go_backward = backward
         super(MMDLayer, self).__init__(**kwargs)
 
@@ -23,7 +24,8 @@ class MMDLayer(tf.keras.layers.Layer):
         return input_shape[0], input_shape[1], self.state_len
 
     def call(self, x, mask=None):
-        d_t1 = tf.zeros(shape=(self.state_len, self.latent_dim), dtype=tf.float32)
+        d_t1 = tf.random.normal(shape=(self.state_len, self.latent_dim), dtype=tf.float32)
+        # d_t1 = self.init_state
         z_t = x
         _, kernel, d_t = tf.keras.backend.rnn(self.step, z_t, [d_t1], go_backwards=self.go_backwards)
 
@@ -57,7 +59,7 @@ class MMDLayer(tf.keras.layers.Layer):
         inside6 = self.get_masked_sum(poly, 6)
         inside8 = self.get_masked_sum(poly, 8)
         inside16 = self.get_masked_sum(poly, 16)
-        inside1000 = self.get_masked_sum(poly, 1024)
+        inside1000 = self.get_masked_sum(poly, self.state_len)
 
         inout = tf.concat([inside1, inside2, inside4, inside6, inside8, inside16, inside1000], axis=1)
         # rbf = tf.exp(gamma)
