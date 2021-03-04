@@ -15,6 +15,12 @@ class MMDLayer(tf.keras.layers.Layer):
         self.mask_th = mask_th
         # self.init_state = tf.constant(np.zeros(shape=(state_len, latent_dim)), dtype=tf.float32)
         # self.go_backward = backward
+        w_init = tf.random_normal_initializer()
+        self.w = tf.Variable(
+            initial_value=w_init(shape=(state_len, latent_dim), dtype="float32"),
+            trainable=False,
+        )
+
         super(MMDLayer, self).__init__(**kwargs)
 
     def build(self, input_shape):
@@ -24,9 +30,10 @@ class MMDLayer(tf.keras.layers.Layer):
         return input_shape[0], input_shape[1], self.state_len
 
     def call(self, x, mask=None):
-        d_t1 = tf.random.normal(shape=(self.state_len, self.latent_dim), dtype=tf.float32)
-        # d_t1 = self.init_state
+        # d_t1 = tf.random.normal(shape=(self.state_len, self.latent_dim), dtype=tf.float32)
+        d_t1 = self.w
         z_t = x
+        # d_t1 = x[1]
         _, kernel, d_t = tf.keras.backend.rnn(self.step, z_t, [d_t1], go_backwards=self.go_backwards)
 
         return kernel
