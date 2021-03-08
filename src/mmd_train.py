@@ -7,7 +7,7 @@ from sklearn.metrics.pairwise import polynomial_kernel
 import pickle
 import logging
 import matplotlib.pyplot as plt
-from utils.data import dataset_training
+from utils.data import dataset_training, get_non_seizure_signal
 from training import get_all_filenames
 from vae_mmd import build_dataset_pickle as test_dataset
 from vae_mmd import plot_mmd
@@ -25,12 +25,13 @@ SEG_LENGTH = 1024
 EXCLUDED_SIZE = 15
 interval_len = 4
 SEQ_LEN = 899
+STATE_LEN = 300
+LATENT_DIM = 16
 
 
 def main():
     arch = 'vae_unsupervised'
     beta = 1e-05
-    latent_dim = 16
     lr = 0.0001
     decay = 0.5
     gamma = 0.0
@@ -40,7 +41,7 @@ def main():
     build_model = vae_model.build_model
     build_model_args = {
         "input_shape": (SEG_LENGTH, 2,),
-        "enc_dimension": latent_dim,
+        "enc_dimension": LATENT_DIM,
         "beta": beta,
         "gamma": 0,
         "optim": Adam(lr),
@@ -51,7 +52,7 @@ def main():
 
     print(encoder.summary())
 
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/20min_v14".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/non_seiz_init_v15".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -67,13 +68,13 @@ def main():
         # val_label = tf.keras.utils.to_categorical(val_label, num_classes=SEQ_LEN)
 
         # Load the specific weights for the model
-        load_dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma, test_patient)
+        load_dirname = root + stub.format(SEG_LENGTH, beta, LATENT_DIM, lr, decay, gamma, test_patient)
         if not os.path.exists(load_dirname):
             print("Model does not exist in {}".format(load_dirname))
             exit()
         model.load_weights(load_dirname)
 
-        vae_mmd_model = vae_model.get_mmd_model(state_len=300, latent_dim=latent_dim, signal_len=SEG_LENGTH,
+        vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
 
         print(vae_mmd_model.summary())
@@ -83,11 +84,18 @@ def main():
 
         print("input shape: {}".format(train_data.shape))
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mse')
-        for iter in range(8):
-            train_random = np.random.randn(train_data.shape[0], train_data.shape[1], 16)
-            val_random = np.random.randn(val_data.shape[0], val_data.shape[1], 16)
+        for iter in range(25):
+            train_random = np.random.randn(train_data.shape[0], train_data.shape[1], LATENT_DIM)
+            val_random = np.random.randn(val_data.shape[0], val_data.shape[1], LATENT_DIM)
+
+            non_seizure_signals = get_non_seizure_signal(test_patient, STATE_LEN)
+            intermediate_model = tf.keras.models.Model(inputs= vae_mmd_model.inputs,
+                                                       outputs= vae_mmd_model.get_layer('latents').output)
+            z_non_seiz = intermediate_model.predict(x= [non_seizure_signals, train_random[:1, :STATE_LEN, :]])
+            vae_mmd_model.get_layer('MMD').set_weights(weights=[z_non_seiz[0,:,0,:] , z_non_seiz[0,:,0,:]])
+
             vae_mmd_model.fit(x=[train_data, train_random], y=train_label,
-                              validation_data=([val_data, val_random], val_label), batch_size=1, epochs=6)
+                              validation_data=([val_data, val_random], val_label), batch_size=1, epochs=2)
 
         savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
         if not os.path.exists(savedir):
@@ -107,12 +115,13 @@ def main():
 def inference(test_patient, trained_model, subdirname):
     sessions = test_dataset(test_patient)
     middle_diff = []
+    not_detected = {}
 
     if trained_model is None:
         save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
         trained_model = tf.keras.models.load_model(save_path)
 
-        vae_mmd_model = vae_model.get_mmd_model(state_len=300, latent_dim=16, signal_len=SEG_LENGTH,
+        vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
 
         for layer_num in range(len(vae_mmd_model.layers)):
@@ -134,7 +143,7 @@ def inference(test_patient, trained_model, subdirname):
         if np.sum(y_true) == 0:
             continue
 
-        for section in [-1]: # range(X.shape[0]//SEQ_LEN):  # [-1]:
+        for section in  [-1]: #range(X.shape[0]//SEQ_LEN):  #
             # y_true_section = y_true[SEQ_LEN*section:SEQ_LEN*(section+1)]
             #
             # if np.sum(y_true_section) == 0:
@@ -169,17 +178,28 @@ def inference(test_patient, trained_model, subdirname):
 
             t_diff = np.abs(accepted_points - mmd_maximum[0])
             LOG.info("Time diff : {}".format(np.min(t_diff)))
-            middle_diff.append(np.min(t_diff))
-    return middle_diff
+            if np.max(mmd_predicted) < 0.1:
+                not_detected[node] = (np.max(mmd_predicted), np.min(t_diff))
+            else:
+                middle_diff.append(np.min(t_diff))
+    return middle_diff, not_detected
 
 
 def get_results():
     arch = 'vae_unsupervised'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/20min_v14".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/non_seiz_init_v15".format(SEG_LENGTH, arch)
     diffs = []
+    nc = {}
     for pat in range(1, 25):
-        diffs += inference(pat, None, subdirname)
+        diff_pat, not_detected_pat = inference(pat, None, subdirname)
+        diffs += diff_pat
+        nc.update(not_detected_pat)
     print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
+    print("Not detected patients: {}".format(nc))
+    plt.figure()
+    plt.hist(diffs, bins=50)
+    plt.savefig("{}/hist_diff.png".format(subdirname))
+    plt.show()
 
 
 if __name__ == "__main__":

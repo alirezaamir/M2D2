@@ -1,5 +1,6 @@
 import numpy as np
 import pickle
+from vae_mmd import build_dataset_pickle as test_dataset
 
 
 def dataset_training(mode, test_patient, all_filenames, max_len = 899):
@@ -33,6 +34,31 @@ def dataset_training(mode, test_patient, all_filenames, max_len = 899):
                     y_total.append((y[start:end, :]))
 
     return np.asarray(X_total), np.asarray(y_total)
+
+
+def get_non_seizure_signal(test_patient, state_len):
+    sessions = test_dataset(test_patient)
+    sessions_permuted = np.random.permutation([s for s in sessions.keys()])
+    for node in sessions_permuted:
+        patient_num = int(node[3:5])
+        if test_patient != patient_num:
+            continue
+
+        x = sessions[node]['data']
+        y_true = sessions[node]['label']
+
+        if np.sum(y_true) != 0:
+            continue
+
+        if x.shape[0] < state_len:
+            continue
+        print("Non Seizure node for initialization : {}".format(node))
+        start_point = x.shape[0]//2 - state_len//2
+        end_point = start_point + state_len
+        x = x[start_point:end_point, :, :]
+
+        return np.expand_dims(x, 0)
+    return np.random.randn(state_len)
 
 
 def make_train_label_bbox(y_true):
