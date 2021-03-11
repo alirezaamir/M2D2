@@ -6,6 +6,7 @@ from vae_mmd import build_dataset_pickle as test_dataset
 def dataset_training(mode, test_patient, all_filenames, max_len = 899):
     X_total = []
     y_total = []
+    seizure_len = []
 
     for filename in all_filenames[mode][test_patient]:
         with open(filename, "rb") as pickle_file:
@@ -14,6 +15,7 @@ def dataset_training(mode, test_patient, all_filenames, max_len = 899):
             y = np.array(data["y"])
             if np.sum(y) == 0:
                 continue
+            seizure_len.append(np.sum(y))
             y = np.expand_dims(y, -1)
             if x.shape[0] == max_len:
                 X_total.append(x)
@@ -33,7 +35,10 @@ def dataset_training(mode, test_patient, all_filenames, max_len = 899):
                     X_total.append(x[start:end, :, :])
                     y_total.append((y[start:end, :]))
 
-    return np.asarray(X_total), np.asarray(y_total)
+    # balance_ratio = max_len / np.mean(seizure_len)
+    balance_ratio = 40
+    print("Balanced Ratio : {}".format(balance_ratio))
+    return np.asarray(X_total), np.asarray(y_total) * balance_ratio
 
 
 def get_non_seizure_signal(test_patient, state_len):

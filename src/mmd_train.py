@@ -52,7 +52,7 @@ def main():
 
     print(encoder.summary())
 
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/non_seiz_init_v15".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/balanced_training_v16".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -60,6 +60,7 @@ def main():
     all_filenames = get_all_filenames()
     for test_patient in range(1,25):
         train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN)
+        print("Label {}, Max {}".format(train_label.shape, np.max(train_label)))
         val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN)
 
         # train_label = np.expand_dims(train_label, -1)
@@ -84,7 +85,7 @@ def main():
 
         print("input shape: {}".format(train_data.shape))
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mse')
-        for iter in range(25):
+        for iter in range(12):
             train_random = np.random.randn(train_data.shape[0], train_data.shape[1], LATENT_DIM)
             val_random = np.random.randn(val_data.shape[0], val_data.shape[1], LATENT_DIM)
 
@@ -187,7 +188,7 @@ def inference(test_patient, trained_model, subdirname):
 
 def get_results():
     arch = 'vae_unsupervised'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/non_seiz_init_v15".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/balanced_training_v16".format(SEG_LENGTH, arch)
     diffs = []
     nc = {}
     for pat in range(1, 25):
