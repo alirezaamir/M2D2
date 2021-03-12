@@ -7,6 +7,7 @@ import os
 import pickle
 import json
 from scipy import signal
+from sklearn.model_selection import train_test_split
 
 np.random.seed(13298)
 FS = 256
@@ -105,6 +106,35 @@ def main():
             save_pickle(data, dirname, record_name, SEG_N)
 
 
-if __name__ == '__main__':
-    main()
+def epilepsiae():
+    for pat in pat_list:
+        for label in ['non_seiz', 'seiz']:
+            data = pickle.load(open('../../input/epilepsiae/{}/{}_{}.pickle'.format(label, pat, label), 'rb'))
+            X = data[label]
 
+            sos = signal.butter(3, 50, fs=FS, btype="lowpass", output="sos")
+            X = signal.sosfilt(sos, X, axis=1)
+            X = scale(X, axis=1)
+            X = np.reshape(X, newshape=(-1, SEG_N, 2))
+
+            Xw = {}
+            Xw["train"], Xw["valid"] = train_test_split(X, test_size = 0.1, random_state = 42)
+
+            output_dict = {"X": [], "y": []}
+            for mode in ["train", "valid"]:
+                dirname = "../../temp/vae_mmd_data/{}/{}/{}".format(SEG_N, "epilepsia_normal", mode)
+                if not os.path.exists(dirname):
+                    os.makedirs(dirname)
+                filename = "{}/{}.pickle".format(dirname, pat)
+                with open(filename, 'wb') as pickle_file:
+                    output_dict["X"]= Xw[mode]
+                    if label == 'non_seiz':
+                        output_dict["y"] = np.zeros(shape=(Xw[mode].shape[0]))
+                    else:
+                        output_dict["y"] = np.ones(shape=Xw[mode].shape[0])
+                    pickle.dump(output_dict, pickle_file)
+
+
+if __name__ == '__main__':
+    # main()
+    epilepsiae()

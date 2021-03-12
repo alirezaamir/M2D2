@@ -16,7 +16,7 @@ from utils.params import SEG_N
 from utils import vae_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import Callback
-
+from utils.params import pat_list
 np.random.seed(13298)
 
 LOG = logging.getLogger(os.path.basename(__file__))
@@ -38,7 +38,9 @@ def main():
     lr = float(sys.argv[4])
     decay = float(sys.argv[5])
     gamma = float(sys.argv[6])
-    test_patient = int(sys.argv[7])
+    test_patient_id = int(sys.argv[7])
+
+    test_patient = pat_list[test_patient_id]
 
     param_str = """
     ==========================
@@ -50,7 +52,7 @@ def main():
     ==========================""".format(arch, beta, decay, latent_dim, lr)
     LOG.info("Training Model with parameters:{}".format(param_str))
 
-    build_model = vae_model.build_ae_model
+    build_model = vae_model.build_model
     root = "../output/vae/{}".format(arch)
     stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}"
     dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay, gamma, test_patient)
@@ -80,7 +82,7 @@ def main():
 
 
 def train_model(model, dirname, lr_init, decay, beta, test_patient):
-    max_epochs = 4  # 200
+    max_epochs = 20  # 200
     patience = 20  # 30
     batch_size = 32
     beta_start_epoch = 10
@@ -96,10 +98,11 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     if not os.path.exists(savedir):
         os.makedirs(savedir)
 
-    for iter in range(5):
-        train_data, train_label = build_dataset_pickle("train", test_patient, all_filenames)
+    get_dataset = build_dataset_epilepsiae
+    for iter in range(10):
+        train_data, train_label = get_dataset("train", test_patient, all_filenames)
         print("Shape :{}, {}".format(train_data.shape, train_label.shape))
-        valid_data, valid_label = build_dataset_pickle("valid", test_patient, all_filenames)
+        valid_data, valid_label = get_dataset("valid", test_patient, all_filenames)
         print("Shape :{}, {}".format(valid_data.shape, valid_label.shape))
         model.fit(x=[train_data, train_label], validation_data=[valid_data, valid_label],
                   initial_epoch=iter * max_epochs,
@@ -107,7 +110,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
                   batch_size=batch_size,
                   # callbacks=[early_stopping, history, scheduler, beta_annealing]
         )
-        del train_data, valid_data  # clear the variable to empty the memory
+        # del train_data, valid_data  # clear the variable to empty the memory
         model.save_weights(savedir, save_format='tf')
 
     savedir = dirname + '/saved_model/'
@@ -116,7 +119,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     model.save_weights(savedir, save_format='tf')
 
 
-def build_dataset_pickle(mode, test_patient, all_filenames):
+def build_dataset_chb(mode, test_patient, all_filenames):
     # filenames = split_list(all_filenames[mode][test_patient], wanted_parts=PART_NUM)
     filenames = np.random.permutation(all_filenames[mode][test_patient])
     number_files = len(filenames) // PART_NUM if mode == "train" else len(filenames)
@@ -133,6 +136,22 @@ def build_dataset_pickle(mode, test_patient, all_filenames):
             X_total[last_pointer: last_pointer + file_data_len] = np.array(data["X"])
             y_total[last_pointer: last_pointer + file_data_len] = np.array(data["y"])
             last_pointer += file_data_len
+
+    return X_total, y_total
+
+
+def build_dataset_epilepsiae(mode, test_patient, _):
+    dirname = "../temp/vae_mmd_data/{}/epilepsia_normal/{}".format(SEG_N, mode)
+    X_total = np.zeros(shape=(0, SEG_N, 2))
+    y_total = np.zeros(shape=(0, ))
+    for pat in pat_list:
+        if pat == test_patient:
+            continue
+        filename = "{}/{}.pickle".format(dirname, pat)
+        with open(filename, "rb") as pickle_file:
+            data = pickle.load(pickle_file)
+            X_total = np.concatenate((X_total, np.array(data["X"])))
+            y_total = np.concatenate((y_total, np.array(data["y"])))
 
     return X_total, y_total
 
