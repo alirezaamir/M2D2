@@ -7,17 +7,17 @@ import pickle
 
 SF = 256
 SEG_LENGTH = 1024
-arch = 'vae_unsupervised'
+arch = 'epilepsiae'
 
 
 def visualize_inout(test_patient):
-    all_filename = get_epilepsy_files()
-
-    random_file = np.random.choice(all_filename[test_patient])
-    print("Random file: {}".format(random_file))
+    # all_filename = get_epilepsy_files()
+    # random_file = np.random.choice(all_filename[test_patient])
+    # print("Random file: {}".format(random_file))
+    random_file = get_epilepsiae_files(test_patient)
 
     with open(random_file, "rb") as pickle_file:
-        name = random_file.split('/')[-1][:8]
+        # name = random_file.split('/')[-1][:8]
         data = pickle.load(pickle_file)
         X_total = np.array(data['X'])
         y_total = np.array(data['y'])
@@ -54,7 +54,7 @@ def visualize_inout(test_patient):
 def get_model(test_patient):
     beta = 1e-05
     latent_dim = 16
-    lr = 0.0001
+    lr = 1e-05
     decay = 0.5
     gamma = 0.0
 
@@ -151,9 +151,15 @@ def get_epilepsy_files():
     return all_filenames
 
 
+def get_epilepsiae_files(test_patient):
+    dirname = "../../temp/vae_mmd_data/{}/epilepsia_normal/{}".format(SEG_LENGTH, 'train')
+    filename = "{}/{}.pickle".format(dirname, test_patient)
+    return filename
+
+
 if __name__ == '__main__':
     tf.config.experimental.set_visible_devices([], 'GPU')
-    visualize_inout(test_patient=1)
+    visualize_inout(test_patient="pat_102")
     # all_filename = get_epilepsy_files()
     # for patient in range(1,25):
     #     print("Model {}".format(patient))
