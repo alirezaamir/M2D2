@@ -8,6 +8,7 @@ import pickle
 import json
 from scipy import signal
 from sklearn.model_selection import train_test_split
+import pandas as pd
 
 np.random.seed(13298)
 FS = 256
@@ -135,6 +136,39 @@ def epilepsiae():
                     pickle.dump(output_dict, pickle_file)
 
 
+def epilepsiae_seizures():
+    window_size = SEG_N
+    dirname = "../../temp/vae_mmd_data/{}/{}".format(SEG_N, "epilepsiae_seizure")
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
+    with open("../../input/GAN_data/seizure.json") as json_file:
+        seizure_files = json.load(json_file)
+        for pat in pat_list:
+            root_path = "../../input/GAN_data/{}".format(pat)
+            for filename in seizure_files[pat]:
+                data = []
+                for channel in ["T3F7", "T4F8"]:
+                    xlsx_file = "{}/{}_{}.xlsx".format(root_path, channel, filename)
+                    dfs = pd.read_excel(xlsx_file, engine='openpyxl')
+                    X = dfs.Var1
+                    sos = signal.butter(3, 50, fs=FS, btype="lowpass", output="sos")
+                    X = signal.sosfilt(sos, X, axis=0)
+                    data.append(scale(X, axis=0))
+                data = np.transpose(data)
+                X_normal = np.asarray(data)
+
+                out_filename = "{}/{}.pickle".format(dirname, filename)
+                output_dict = {"X": [], "y": []}
+                with open(out_filename, 'wb') as pickle_file:
+                    for ix in range(window_size, X_normal.shape[0], window_size):
+                        Xw = X_normal[ix - window_size:ix, :]
+                        y = 0 if np.sum(dfs.Var2[ix - window_size:ix]) == 0 else 1
+                        output_dict["X"].append(Xw)
+                        output_dict["y"].append(y)
+                    print("Filename: {}, X shape:{}".format(filename, np.array(output_dict["X"]).shape))
+                    pickle.dump(output_dict, pickle_file)
+
+
 if __name__ == '__main__':
     # main()
-    epilepsiae()
+    epilepsiae_seizures()
