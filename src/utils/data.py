@@ -1,6 +1,8 @@
 import numpy as np
 import pickle
 from vae_mmd import build_dataset_pickle as test_dataset
+import pandas as pd
+import os
 
 
 def dataset_training(mode, test_patient, all_filenames, max_len = 899):
@@ -90,3 +92,53 @@ def make_train_label_classification(y_true):
     longest_seizure = np.argmax(seizure_len)
     y_class = middle_points[longest_seizure]
     return np.asarray(y_class).astype('float32')
+
+
+def get_epilepsiae_seizures(mode, test_patient, dirname, max_len = 899):
+    X_total = []
+    y_total = []
+    mode_dirname = "{}/{}".format(dirname, mode)
+    all_filenames = ["{}/{}".format(mode_dirname, x) for x in os.listdir(mode_dirname) if not x.startswith(test_patient)]
+    for filename in all_filenames:
+        with open(filename, 'rb') as pickle_file:
+            data = pickle.load(pickle_file)
+            x = np.array(data["X"])
+            y = np.array(data["y"])
+
+            y = np.expand_dims(y, -1)
+            if x.shape[0] == max_len:
+                X_total.append(x)
+                y_total.append(y)
+            elif x.shape[0] < max_len:
+                diff = max_len - x.shape[0]
+                x = np.pad(x, pad_width=[(0, diff), (0, 0), (0, 0)], constant_values=0)
+                X_total.append(x)
+                y = np.pad(y, pad_width=[(0, diff), (0, 0)], constant_values=0)
+                y_total.append(y)
+            elif x.shape[0] > max_len:
+                for i in range(x.shape[0] // max_len):
+                    start = i * max_len
+                    end = (i + 1) * max_len
+                    if np.sum(y[start:end]) == 0:
+                        continue
+                    X_total.append(x[start:end, :, :])
+                    y_total.append((y[start:end, :]))
+
+    return np.asarray(X_total), np.asarray(y_total)
+
+
+def get_epilepsiae_test(test_patient):
+    dataset = {}
+    for mode in ["train", "valid"]:
+        dirname = "../temp/vae_mmd_data/1024/epilepsiae_seizure/{}".format(mode)
+        filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if x.startswith(test_patient)]
+        for filename in filenames:
+            with open(filename, "rb") as pickle_file:
+                pickle_name = filename.split('/')[-1]
+                name = pickle_name.split('.')[0]
+                data = pickle.load(pickle_file)
+                x = np.array(data["X"])
+                y = np.array(data["y"])
+                dataset[name] = {'data': x, 'label': y}
+
+    return dataset
