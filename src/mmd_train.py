@@ -7,10 +7,11 @@ from sklearn.metrics.pairwise import polynomial_kernel
 import pickle
 import logging
 import matplotlib.pyplot as plt
-from utils.data import dataset_training, get_non_seizure_signal
+from utils.data import dataset_training, get_non_seizure_signal, get_epilepsiae_seizures, get_epilepsiae_test
 from training import get_all_filenames
 from vae_mmd import build_dataset_pickle as test_dataset
 from vae_mmd import plot_mmd
+from utils.params import pat_list
 
 
 LOG = logging.getLogger(os.path.basename(__file__))
@@ -30,9 +31,9 @@ LATENT_DIM = 16
 
 
 def main():
-    arch = 'vae_unsupervised'
+    arch = 'epilepsiae'
     beta = 1e-05
-    lr = 0.0001
+    lr = 1e-05
     decay = 0.5
     gamma = 0.0
 
@@ -52,16 +53,20 @@ def main():
 
     print(encoder.summary())
 
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/balanced_training_v16".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/epilepsiae_v17".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
     middle_diff = []
-    all_filenames = get_all_filenames()
-    for test_patient in range(1,25):
-        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN)
+    # all_filenames = get_all_filenames()
+    input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
+    for test_id in range(30):#range(1,25):
+        test_patient = pat_list[test_id]
+        # train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN)
+        train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN)
         print("Label {}, Max {}".format(train_label.shape, np.max(train_label)))
-        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN)
+        # val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN)
+        val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN)
 
         # train_label = np.expand_dims(train_label, -1)
         # val_label = np.expand_dims(val_label, -1)
@@ -85,15 +90,15 @@ def main():
 
         print("input shape: {}".format(train_data.shape))
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mse')
-        for iter in range(12):
+        for iter in range(15):
             train_random = np.random.randn(train_data.shape[0], train_data.shape[1], LATENT_DIM)
             val_random = np.random.randn(val_data.shape[0], val_data.shape[1], LATENT_DIM)
 
-            non_seizure_signals = get_non_seizure_signal(test_patient, STATE_LEN)
-            intermediate_model = tf.keras.models.Model(inputs= vae_mmd_model.inputs,
-                                                       outputs= vae_mmd_model.get_layer('latents').output)
-            z_non_seiz = intermediate_model.predict(x= [non_seizure_signals, train_random[:1, :STATE_LEN, :]])
-            vae_mmd_model.get_layer('MMD').set_weights(weights=[z_non_seiz[0,:,0,:] , z_non_seiz[0,:,0,:]])
+            # non_seizure_signals = get_non_seizure_signal(test_patient, STATE_LEN)
+            # intermediate_model = tf.keras.models.Model(inputs= vae_mmd_model.inputs,
+            #                                            outputs= vae_mmd_model.get_layer('latents').output)
+            # z_non_seiz = intermediate_model.predict(x= [non_seizure_signals, train_random[:1, :STATE_LEN, :]])
+            # vae_mmd_model.get_layer('MMD').set_weights(weights=[z_non_seiz[0,:,0,:] , z_non_seiz[0,:,0,:]])
 
             vae_mmd_model.fit(x=[train_data, train_random], y=train_label,
                               validation_data=([val_data, val_random], val_label), batch_size=1, epochs=2)
@@ -114,7 +119,7 @@ def main():
 
 
 def inference(test_patient, trained_model, subdirname):
-    sessions = test_dataset(test_patient)
+    sessions = get_epilepsiae_test(test_patient)
     middle_diff = []
     not_detected = {}
 
@@ -132,11 +137,11 @@ def inference(test_patient, trained_model, subdirname):
         vae_mmd_model = trained_model
 
     for node in sessions.keys():
-        patient_num = int(node[3:5])
-        if test_patient != patient_num:
-            continue
+        # patient_num = int(node[3:5])
+        # if test_patient != patient_num:
+        #     continue
 
-        LOG.info("session name: {}".format(test_patient))
+        LOG.info("{}, session name: {}".format(test_patient, node))
         X = sessions[node]['data']
         LOG.info("session number: {}".format(len(X)))
         y_true = sessions[node]['label']
@@ -144,16 +149,16 @@ def inference(test_patient, trained_model, subdirname):
         if np.sum(y_true) == 0:
             continue
 
-        for section in  [-1]: #range(X.shape[0]//SEQ_LEN):  #
-            # y_true_section = y_true[SEQ_LEN*section:SEQ_LEN*(section+1)]
-            #
-            # if np.sum(y_true_section) == 0:
-            #     continue
-            #
-            # X_section = X[SEQ_LEN*section:SEQ_LEN*(section+1)]
+        for section in range(X.shape[0]//SEQ_LEN):  # [-1]
+            y_true_section = y_true[SEQ_LEN*section:SEQ_LEN*(section+1)]
 
-            X_section = X
-            y_true_section = y_true
+            if np.sum(y_true_section) == 0:
+                continue
+
+            X_section = X[SEQ_LEN*section:SEQ_LEN*(section+1)]
+
+            # X_section = X
+            # y_true_section = y_true
             X_section = np.expand_dims(X_section, 0)
 
             input_random = np.random.randn(X_section.shape[0], X_section.shape[1], 16)
@@ -187,11 +192,12 @@ def inference(test_patient, trained_model, subdirname):
 
 
 def get_results():
-    arch = 'vae_unsupervised'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/balanced_training_v16".format(SEG_LENGTH, arch)
+    arch = 'epilepsiae'
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/epilepsiae_v17".format(SEG_LENGTH, arch)
     diffs = []
     nc = {}
-    for pat in range(1, 25):
+    for pat_id in range(30):
+        pat = pat_list[pat_id]
         diff_pat, not_detected_pat = inference(pat, None, subdirname)
         diffs += diff_pat
         nc.update(not_detected_pat)
@@ -200,7 +206,6 @@ def get_results():
     plt.figure()
     plt.hist(diffs, bins=50)
     plt.savefig("{}/hist_diff.png".format(subdirname))
-    plt.show()
 
 
 if __name__ == "__main__":
