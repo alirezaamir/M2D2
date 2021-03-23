@@ -169,6 +169,51 @@ def epilepsiae_seizures():
                     pickle.dump(output_dict, pickle_file)
 
 
+def get_epilepsiae_non_seizure(test_patient, state_len):
+    with open("../input/GAN_data/seizure.json") as json_file:
+        seizure_files = json.load(json_file)
+        root_path = "../input/GAN_data/{}".format(test_patient)
+        all_filenames = [x for x in os.listdir(root_path) if x.split('.')[0][5:] not in seizure_files[test_patient]]
+        random_filenames = np.random.permutation(all_filenames)
+        for filename in random_filenames:
+            random_filename = filename.split('.')[0][5:]
+            data = []
+            for channel in ["T3F7", "T4F8"]:
+                xlsx_file = "{}/{}_{}.xlsx".format(root_path, channel, random_filename)
+                dfs = pd.read_excel(xlsx_file, engine='openpyxl')
+                X = dfs.Var1
+                sos = signal.butter(3, 50, fs=FS, btype="lowpass", output="sos")
+                X = signal.sosfilt(sos, X, axis=0)
+                data.append(scale(X, axis=0))
+            data = np.transpose(data)
+            X_normal = np.asarray(data)
+
+
+            dirname = "../temp/vae_mmd_data/{}/{}".format(SEG_N, "epilepsiae_non_seizure")
+            if not os.path.exists(dirname):
+                os.makedirs(dirname)
+            out_filename = "{}/{}.pickle".format(dirname, random_filename)
+            output_dict = {"X": [], "y": []}
+            with open(out_filename, 'wb') as pickle_file:
+                for ix in range(SEG_N, X_normal.shape[0], SEG_N):
+                    Xw = X_normal[ix - SEG_N:ix, :]
+                    y = 0 if np.sum(dfs.Var2[ix - SEG_N:ix]) == 0 else 1
+                    output_dict["X"].append(Xw)
+                    output_dict["y"].append(y)
+                print("Filename: {}, X shape:{}".format(random_filename, np.array(output_dict["X"]).shape))
+                pickle.dump(output_dict, pickle_file)
+            x = np.array(output_dict["X"])
+            if x.shape[0] < state_len:
+                continue
+
+            start_point = x.shape[0] // 2 - state_len // 2
+            end_point = start_point + state_len
+            x = x[start_point:end_point, :, :]
+
+            return np.expand_dims(x, 0)
+
+
 if __name__ == '__main__':
     # main()
     epilepsiae_seizures()
+    # get_epilepsiae_non_seizure('pat_102')
