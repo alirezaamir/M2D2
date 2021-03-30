@@ -37,12 +37,15 @@ def build_model(input_shape=None,
 
     #
     y_true = layers.Input(shape=(1), name="true_label")
-    cl_input = layers.Input(shape=(enc_dimension,), name='z_classifier_in')
-    cl_dense1 = layers.Dense(enc_dimension, activation="relu", name="classifier_dense1")(cl_input)
-    cl_dense2 = layers.Dense(1, activation=None, name="classifier_dense2")(cl_dense1)
-    classifier = models.Model(
-        inputs=cl_input, outputs=cl_dense2, name="classifier")
-    y_class = classifier(encoder(ii)[2])
+    # cl_input = layers.Input(shape=(enc_dimension,), name='z_classifier_in')
+    # cl_dense1 = layers.Dense(enc_dimension, activation="relu", name="classifier_dense1")(cl_input)
+    # cl_dense2 = layers.Dense(1, activation=None, name="classifier_dense2")(cl_dense1)
+    # classifier = models.Model(
+    #     inputs=cl_input, outputs=cl_dense2, name="classifier")
+    # y_class = classifier(encoder(ii)[2])
+
+    cl_dense1 = layers.Dense(enc_dimension, activation="relu", name="classifier_dense1")(z)
+    cl_dense2 = layers.Dense(1, activation='sigmoid', name="classifier_dense2")(cl_dense1)
 
     latent_inputs = layers.Input(shape=(enc_dimension,), name='z_sampling')
     q = layers.Dense(shape[1] * shape[2], activation="relu")(latent_inputs)
@@ -63,35 +66,18 @@ def build_model(input_shape=None,
     x_hat_psd = 1 / (FS * input_shape[0]) * tf.math.square(fft_permutation)
 
     recons_cost = K.mean(losses.mse(ii, x_hat))
-    freq_cost = K.mean(losses.mse(input_psd[:, 1:, :], x_hat_psd[:, 1:, :]))
-    freq_cost = K.abs(freq_cost)
 
-    # z_actual = tf.random.normal(tf.stack([200, enc_dimension]))
-    # divergence = mmd_loss(z, z_actual)
-
-    # First method for KL divergence
-    # z_actual = tf.random.normal([1, enc_dimension])
-    # kl = tf.keras.losses.KLDivergence()
-    # divergence = kl(z_actual, z)
-
-    # Second method to calculate the KL divergence
     logpz = log_normal_pdf(z, 0., 0.)
     logqz_x = log_normal_pdf(z, mu, sigma)
     divergence = K.mean(-logpz + logqz_x)
 
-    # classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=y_class))
+    classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=cl_dense2))
 
-    cost = recons_cost + beta * divergence  # + gamma*freq_cost + 0.1 * classification_cost
+    cost = recons_cost + beta * divergence + 20 * classification_cost # + gamma*freq_cost + 0.1 * classification_cost
 
     model = models.Model(inputs=[ii, y_true], outputs=x_hat)
     model.add_loss(cost)
     model.compile(optimizer=optim)
-
-    # model.metrics.append(recons_cost)
-    # model.metrics_names.append("recons_cost")
-
-    # model.metrics.append(freq_cost)
-    # model.metrics_names.append("freq_cost")
 
     model.metrics.append(divergence)
     model.metrics_names.append("mmd_elbo")
@@ -120,8 +106,8 @@ def build_ae_model(input_shape=None,
 
     #
     y_true = layers.Input(shape=(1), name="true_label")
-    # cl_dense1 = layers.Dense(enc_dimension, activation="relu", name="classifier_dense1")(z)
-    # cl_dense2 = layers.Dense(1, activation=None, name="classifier_dense2")(cl_dense1)
+    cl_dense1 = layers.Dense(enc_dimension, activation="relu", name="classifier_dense1")(z)
+    cl_dense2 = layers.Dense(1, activation='sigmoid', name="classifier_dense2")(cl_dense1)
 
     q = layers.Dense(shape[1] * shape[2], activation="relu")(z)
     q = layers.Reshape((shape[1], shape[2]))(q)
@@ -136,9 +122,9 @@ def build_ae_model(input_shape=None,
 
     recons_cost = K.mean(losses.mse(ii, x_hat))
 
-    # classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=cl_dense2))
+    classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=cl_dense2))
 
-    cost = recons_cost  # + 0.1 * classification_cost  # + beta*divergence + gamma*freq_cost
+    cost = recons_cost + 20 * classification_cost  # + beta*divergence + gamma*freq_cost
 
     model = models.Model(inputs=[ii, y_true], outputs=x_hat)
     model.add_loss(cost)
@@ -166,14 +152,18 @@ def get_mmd_model(state_len=None,
         x = layers.TimeDistributed(layers.MaxPooling1D(2), name="pool_{}".format(i+1))(x)
 
     x = layers.TimeDistributed(layers.Flatten(), name='flatten')(x)
-    mu = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="mu", trainable=trainable_vae),
-                                name='mu')(x)
-    sigma = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="sigma", trainable=trainable_vae),
-                                   name='sigma')(x)
-    z = layers.Lambda(
-        simple_sampling, output_shape=(latent_dim,), name="latents")([mu, sigma, input_random])
-    mmd = tf.keras.layers.Bidirectional(MMDLayer(state_len, latent_dim, mask_th=6, go_backwards=False), name='MMD')(z)
-    gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=25, return_sequences=True), name='GRU')(mmd)
+    # mu = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="mu", trainable=trainable_vae),
+    #                             name='mu')(x)
+    z = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="z", trainable=trainable_vae),
+                                name='z')(x)
+    z_ae = layers.Lambda(expand_dim, output_shape=(latent_dim, ), name="latents")(z)
+    # sigma = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="sigma", trainable=trainable_vae),
+    #                                name='sigma')(x)
+    # z = layers.Lambda(
+    #     simple_sampling, output_shape=(latent_dim,), name="latents")([mu, sigma, input_random])
+    mmd = tf.keras.layers.Bidirectional(MMDLayer(state_len, latent_dim, mask_th=6, go_backwards=False), name='MMD')(z_ae)
+    avg = tf.keras.layers.AveragePooling1D(pool_size=5)(mmd)
+    gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=25, return_sequences=True), name='GRU')(avg)
     dense1 = tf.keras.layers.Dense(200, activation='relu', name='dense1')(gru)
     final_dense = tf.keras.layers.Dense(1, activation=None, name='final_dense')(dense1)
 
@@ -192,6 +182,11 @@ def sampling(args):
 def simple_sampling(args):
     z_mean, z_log_var, epsilon = args
     z =  epsilon * K.exp(0.5 * z_log_var) + z_mean
+    z_expanded = K.expand_dims(z, axis=2)
+    return z_expanded
+
+
+def expand_dim(z):
     z_expanded = K.expand_dims(z, axis=2)
     return z_expanded
 

@@ -16,6 +16,7 @@ from utils.params import SEG_N
 from utils import vae_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import Callback
+from tensorflow.keras.callbacks import Callback, EarlyStopping, CSVLogger, LearningRateScheduler
 from utils.params import pat_list
 np.random.seed(13298)
 
@@ -28,7 +29,7 @@ LOG.addHandler(ch)
 LOG.setLevel(logging.INFO)
 
 FS = 256.0
-PART_NUM = 3
+PART_NUM = 2
 
 
 def main():
@@ -40,7 +41,8 @@ def main():
     gamma = float(sys.argv[6])
     test_patient_id = int(sys.argv[7])
 
-    test_patient = pat_list[test_patient_id]
+    # test_patient = pat_list[test_patient_id] if test_patient_id != -1 else test_patient_id
+    test_patient = str(test_patient_id)
 
     param_str = """
     ==========================
@@ -52,7 +54,7 @@ def main():
     ==========================""".format(arch, beta, decay, latent_dim, lr)
     LOG.info("Training Model with parameters:{}".format(param_str))
 
-    build_model = vae_model.build_model
+    build_model = vae_model.build_ae_model
     root = "../output/vae/{}".format(arch)
     stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}"
     dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay, gamma, test_patient)
@@ -82,24 +84,29 @@ def main():
 
 
 def train_model(model, dirname, lr_init, decay, beta, test_patient):
-    max_epochs = 20  # 200
-    patience = 20  # 30
+    max_epochs = 5  # 200
+    patience = 20
     batch_size = 32
     beta_start_epoch = 10
 
-    # history = CSVLogger(dirname + "/training.log")
-    # early_stopping = EarlyStopping(
-    #     monitor="loss", patience=patience, restore_best_weights=True)
-    # scheduler = LearningRateScheduler(lambda x, y: lr_init * np.exp(-decay * x))
-    # beta_annealing = AnnealingCallback(beta, beta_start_epoch, max_epochs)
+    history = CSVLogger(dirname + "/training.log")
+    early_stopping = EarlyStopping(
+        monitor="loss", patience=patience, restore_best_weights=True)
+    scheduler = LearningRateScheduler(lambda x, y: lr_init * np.exp(-decay * x))
+    beta_annealing = AnnealingCallback(beta, beta_start_epoch, max_epochs)
 
-    all_filenames = get_all_filenames()
+    all_filenames = get_all_filenames(entire_dataset=False)
+    print(all_filenames["train"][test_patient])
     savedir = dirname + '/saved_model/'
     if not os.path.exists(savedir):
         os.makedirs(savedir)
 
-    get_dataset = build_dataset_epilepsiae
-    for iter in range(10):
+    get_dataset = build_dataset_chb
+    savedir = dirname + '/saved_model/'
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
+
+    for iter in range(12):
         train_data, train_label = get_dataset("train", test_patient, all_filenames)
         print("Shape :{}, {}".format(train_data.shape, train_label.shape))
         valid_data, valid_label = get_dataset("valid", test_patient, all_filenames)
@@ -108,15 +115,10 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
                   initial_epoch=iter * max_epochs,
                   epochs=(iter + 1) * max_epochs,
                   batch_size=batch_size,
-                  # callbacks=[early_stopping, history, scheduler, beta_annealing]
+                  shuffle=True,
+                  callbacks=[early_stopping, history, scheduler, beta_annealing]
         )
-        # del train_data, valid_data  # clear the variable to empty the memory
         model.save_weights(savedir, save_format='tf')
-
-    savedir = dirname + '/saved_model/'
-    if not os.path.exists(savedir):
-        os.makedirs(savedir)
-    model.save_weights(savedir, save_format='tf')
 
 
 def build_dataset_chb(mode, test_patient, all_filenames):
@@ -141,17 +143,17 @@ def build_dataset_chb(mode, test_patient, all_filenames):
 
 
 def build_dataset_epilepsiae(mode, test_patient, _):
-    dirname = "../temp/vae_mmd_data/{}/epilepsia_normal/{}".format(SEG_N, mode)
     X_total = np.zeros(shape=(0, SEG_N, 2))
     y_total = np.zeros(shape=(0, ))
-    for pat in pat_list:
-        if pat == test_patient:
-            continue
-        filename = "{}/{}.pickle".format(dirname, pat)
-        with open(filename, "rb") as pickle_file:
-            data = pickle.load(pickle_file)
-            X_total = np.concatenate((X_total, np.array(data["X"])))
-            y_total = np.concatenate((y_total, np.array(data["y"])))
+    for label in ['non_seizure', 'seizure']:
+        dirname = "../temp/vae_mmd_data/{}/epilepsiae_{}/{}".format(SEG_N, label, mode)
+        filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if not x.startswith("{}".format(test_patient))]
+        print(filenames)
+        for filename in filenames:
+            with open(filename, "rb") as pickle_file:
+                data = pickle.load(pickle_file)
+                X_total = np.concatenate((X_total, np.array(data["X"])))
+                y_total = np.concatenate((y_total, np.array(data["y"])))
 
     return X_total, y_total
 
@@ -183,14 +185,19 @@ def get_data_len(filenames):
     return total_len
 
 
-def get_all_filenames():
+def get_all_filenames(entire_dataset=False):
     all_filenames = {'train': {}, 'valid': {}}
     for mode in 'train', 'valid':
-        for test_patient in range(1, 25):
-            dirname = "../temp/vae_mmd_data/{}/full_normal/{}".format(SEG_N, mode)
-            filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if not
-            x.startswith("chb{:02d}".format(test_patient))]
-            all_filenames[mode][test_patient] = filenames
+        dirname = "../temp/vae_mmd_data/{}/full_normal/{}".format(SEG_N, mode)
+        if entire_dataset:
+            filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname)]
+            all_filenames[mode]['-1'] = filenames
+            continue
+        else:
+            for test_patient in range(1, 25):
+                filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if not
+                x.startswith("chb{:02d}".format(test_patient))]
+                all_filenames[mode][str(test_patient)] = filenames
     return all_filenames
 
 
@@ -218,9 +225,11 @@ def _parse_fn(proto):
 class AnnealingCallback(Callback):
 
     def __init__(self, beta, beta_start_epoch=3, max_epochs=200):
+
         self.beta = beta
         self.beta_start_epoch = beta_start_epoch
         self.max_epochs = max_epochs
+        super().__init__()
 
     def on_epoch_end(self, epoch, logs=None):
         if epoch > self.beta_start_epoch:

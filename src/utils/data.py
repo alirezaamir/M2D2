@@ -98,7 +98,7 @@ def get_epilepsiae_seizures(mode, test_patient, dirname, max_len = 899):
     X_total = []
     y_total = []
     mode_dirname = "{}/{}".format(dirname, mode)
-    all_filenames = ["{}/{}".format(mode_dirname, x) for x in os.listdir(mode_dirname) if not x.startswith(test_patient)]
+    all_filenames = ["{}/{}".format(mode_dirname, x) for x in os.listdir(mode_dirname) if not x.startswith(str(test_patient))]
     for filename in all_filenames:
         with open(filename, 'rb') as pickle_file:
             data = pickle.load(pickle_file)
