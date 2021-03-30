@@ -13,6 +13,7 @@ from training import get_all_filenames
 from vae_mmd import build_dataset_pickle as test_dataset
 from vae_mmd import plot_mmd
 from utils.params import pat_list
+import datetime
 
 
 LOG = logging.getLogger(os.path.basename(__file__))
@@ -28,14 +29,14 @@ EXCLUDED_SIZE = 15
 interval_len = 4
 SEQ_LEN = 899
 STATE_LEN = 300
-LATENT_DIM = 16
+LATENT_DIM = 32
 
 
 def main():
-    arch = 'epilepsiae'
+    arch = 'vae_sup_chb'
     beta = 1e-05
-    lr = 1e-05
-    decay = 0.5
+    lr = 0.0001
+    decay = 0.02
     gamma = 0.0
 
     root = "../output/vae/{}/".format(arch)
@@ -54,20 +55,24 @@ def main():
 
     print(encoder.summary())
 
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/epi_init_v18".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/vae_point_mmd_v20".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
+    log_dir = "{}/logs/{}".format(subdirname, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
     middle_diff = []
-    # all_filenames = get_all_filenames()
-    input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in range(30):#range(1,25):
-        test_patient = pat_list[test_id]
-        # train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN)
-        train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN)
+    all_filenames = get_all_filenames(entire_dataset=True)
+    # input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
+    for test_id in ["-1"]:  # range(30):  # range(1,25):
+        # test_patient = pat_list[test_id]
+        test_patient = test_id
+        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN)
+        # train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN)
         print("Label {}, Max {}".format(train_label.shape, np.max(train_label)))
-        # val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN)
-        val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN)
+        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN)
+        # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN)
 
         # train_label = np.expand_dims(train_label, -1)
         # val_label = np.expand_dims(val_label, -1)
@@ -85,38 +90,41 @@ def main():
                                                 seq_len=None, trainable_vae=True)
 
         print(vae_mmd_model.summary())
-        for layer_num in range(13):
+        for layer_num in range(10):  # 13 for VAE
             weights = encoder.layers[layer_num].get_weights()
             vae_mmd_model.layers[layer_num].set_weights(weights)
+        weights = encoder.get_layer('z').get_weights()
+        vae_mmd_model.get_layer('z').set_weights(weights)
 
         print("input shape: {}".format(train_data.shape))
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mse')
-        for iter in range(10):
-            train_random = np.random.randn(train_data.shape[0], train_data.shape[1], LATENT_DIM)
-            val_random = np.random.randn(val_data.shape[0], val_data.shape[1], LATENT_DIM)
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), loss='mse')
+        # for iter in range(40):
+        train_random = np.random.randn(train_data.shape[0], train_data.shape[1], LATENT_DIM)
+        val_random = np.random.randn(val_data.shape[0], val_data.shape[1], LATENT_DIM)
 
-            vae_mmd_model.fit(x=[train_data, train_random], y=train_label,
-                              validation_data=([val_data, val_random], val_label), batch_size=1, epochs=2)
+        vae_mmd_model.fit(x=[train_data, train_random], y=train_label,
+                          validation_data=([val_data, val_random], val_label), batch_size=1, epochs=200,
+                          callbacks=[tensorboard_callback])
 
-            non_seizure_signals = get_epilepsiae_non_seizure(test_patient, STATE_LEN)
-            intermediate_model = tf.keras.models.Model(inputs=vae_mmd_model.inputs,
-                                                       outputs=vae_mmd_model.get_layer('latents').output)
-            z_non_seiz = intermediate_model.predict(x=[non_seizure_signals, train_random[:1, :STATE_LEN, :]])
-            vae_mmd_model.get_layer('MMD').set_weights(weights=[z_non_seiz[0, :, 0, :], z_non_seiz[0, :, 0, :]])
+            # non_seizure_signals = get_epilepsiae_non_seizure(test_patient, STATE_LEN)
+            # intermediate_model = tf.keras.models.Model(inputs=vae_mmd_model.inputs,
+            #                                            outputs=vae_mmd_model.get_layer('latents').output)
+            # z_non_seiz = intermediate_model.predict(x=[non_seizure_signals, train_random[:1, :STATE_LEN, :]])
+            # vae_mmd_model.get_layer('MMD').set_weights(weights=[z_non_seiz[0, :, 0, :], z_non_seiz[0, :, 0, :]])
 
         savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
         if not os.path.exists(savedir):
             os.makedirs(savedir)
         vae_mmd_model.save(savedir)
 
-        diffs, _ = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname)
-        middle_diff += diffs
+        # diffs, _ = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname)
+        # middle_diff += diffs
 
-    print(middle_diff)
-    plt.figure()
-    plt.hist(middle_diff)
-    plt.savefig("{}/hist_diff.png".format(subdirname))
-    plt.show()
+    # print(middle_diff)
+    # plt.figure()
+    # plt.hist(middle_diff)
+    # plt.savefig("{}/hist_diff.png".format(subdirname))
+    # plt.show()
 
 
 def inference(test_patient, trained_model, subdirname):
@@ -188,7 +196,7 @@ def inference(test_patient, trained_model, subdirname):
             if np.max(mmd_predicted) < 0.01:
                 not_detected[node] = (np.max(mmd_predicted), np.min(t_diff))
             else:
-                middle_diff.append(np.min(t_diff) / 15.0)
+                middle_diff.append(np.min(t_diff))
     return middle_diff, not_detected
 
 
@@ -204,12 +212,39 @@ def get_results():
         nc.update(not_detected_pat)
     print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
     print("Not detected patients: {}".format(nc))
+    diffs_minute = [x/15.0 for x in diffs]
     plt.figure()
-    plt.hist(diffs, bins=150,range=(0, 3000/15))
+    plt.hist(diffs_minute, bins=150,range=(0, 4 * 60))
     plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
+
+
+# def across_dataset():
+#     source_arch = 'vae_unsupervised'
+#     source_model = 'not_frozen_v13'
+#     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
+#     if not os.path.exists(subdirname):
+#         os.makedirs(subdirname)
+#     diffs = []
+#     nc = {}
+#     save_path = '../temp/vae_mmd/integrated/{}/{}/{}/model/test_{}/saved_model/'.format(SEG_LENGTH,
+#                                                                                         source_arch,
+#                                                                                         source_model,
+#                                                                                         1)
+#     trained_model = tf.keras.models.load_model(save_path)
+#     for pat_id in range(30):
+#         pat = pat_list[pat_id]
+#         diff_pat, not_detected_pat = inference(pat, trained_model, subdirname)
+#         diffs += diff_pat
+#         nc.update(not_detected_pat)
+#     print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
+#     print("Not detected patients: {}".format(nc))
+#     plt.figure()
+#     plt.hist(diffs, bins=150, range=(0, 3000 / 15))
+#     plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
 
 
 if __name__ == "__main__":
     # tf.config.experimental.set_visible_devices([], 'GPU')
-    # main()
-    get_results()
+    main()
+    # get_results()
+    # across_dataset()
