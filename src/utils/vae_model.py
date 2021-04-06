@@ -141,7 +141,6 @@ def get_mmd_model(state_len=None,
                   seq_len = None,
                   trainable_vae=True):
     input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 2))
-    input_random = tf.keras.layers.Input(shape=(seq_len, latent_dim))
     x = input_signal
     num_conv_layers = 3
     for i in range(num_conv_layers):
@@ -152,22 +151,20 @@ def get_mmd_model(state_len=None,
         x = layers.TimeDistributed(layers.MaxPooling1D(2), name="pool_{}".format(i+1))(x)
 
     x = layers.TimeDistributed(layers.Flatten(), name='flatten')(x)
-    # mu = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="mu", trainable=trainable_vae),
-    #                             name='mu')(x)
-    z = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="z", trainable=trainable_vae),
-                                name='z')(x)
-    z_ae = layers.Lambda(expand_dim, output_shape=(latent_dim, ), name="latents")(z)
-    # sigma = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="sigma", trainable=trainable_vae),
-    #                                name='sigma')(x)
-    # z = layers.Lambda(
-    #     simple_sampling, output_shape=(latent_dim,), name="latents")([mu, sigma, input_random])
-    mmd = tf.keras.layers.Bidirectional(MMDLayer(state_len, latent_dim, mask_th=6, go_backwards=False), name='MMD')(z_ae)
-    avg = tf.keras.layers.AveragePooling1D(pool_size=5)(mmd)
-    gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=25, return_sequences=True), name='GRU')(avg)
+    mu = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="mu", trainable=trainable_vae),
+                                name='mu')(x)
+    sigma = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="sigma", trainable=trainable_vae),
+                                   name='sigma')(x)
+    z = layers.Lambda(
+        new_sampling, output_shape=(latent_dim,), name="latents")([mu, sigma, latent_dim])
+    mmd = tf.keras.layers.Bidirectional(MMDLayer(state_len, latent_dim, mask_th=6, go_backwards=False), name='MMD')(z)
+    interval = tf.keras.layers.Conv1D(filters=6, kernel_size=11, padding='same', use_bias=False, name='conv_interval',
+                                      trainable=False)(mmd)
+    gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=25, return_sequences=True), name='GRU')(interval)
     dense1 = tf.keras.layers.Dense(200, activation='relu', name='dense1')(gru)
     final_dense = tf.keras.layers.Dense(1, activation=None, name='final_dense')(dense1)
 
-    model = tf.keras.models.Model(inputs=[input_signal, input_random], outputs=final_dense)
+    model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
     return model
 
 
@@ -177,6 +174,15 @@ def sampling(args):
     dim = K.int_shape(z_mean)[1]
     epsilon = K.random_normal(shape=(batch, dim))
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
+
+
+def new_sampling(args):
+    z_mean, z_log_var, dim = args
+    batch = K.shape(z_mean)[0]
+    epsilon = K.random_normal(shape=(batch, dim))
+    z = z_mean + K.exp(0.5 * z_log_var) * epsilon
+    z_expanded = K.expand_dims(z, axis=2)
+    return z_expanded
 
 
 def simple_sampling(args):
