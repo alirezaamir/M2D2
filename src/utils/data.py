@@ -5,7 +5,7 @@ import pandas as pd
 import os
 
 
-def dataset_training(mode, test_patient, all_filenames, max_len = 899):
+def dataset_training(mode, test_patient, all_filenames, max_len=899):
     X_total = []
     y_total = []
     seizure_len = []
@@ -24,21 +24,21 @@ def dataset_training(mode, test_patient, all_filenames, max_len = 899):
                 y_total.append(y)
             elif x.shape[0] < max_len:
                 diff = max_len - x.shape[0]
-                x = np.pad(x,pad_width=[(0, diff), (0,0), (0,0)], constant_values=0)
+                x = np.pad(x, pad_width=[(0, diff), (0, 0), (0, 0)], constant_values=0)
                 X_total.append(x)
-                y = np.pad(y,pad_width=[(0, diff), (0,0)],constant_values=0)
+                y = np.pad(y, pad_width=[(0, diff), (0, 0)], constant_values=0)
                 y_total.append(y)
             elif x.shape[0] > max_len:
-                for i in range(x.shape[0]//max_len):
-                    start = i*max_len
-                    end = (i+1)* max_len
+                for i in range(x.shape[0] // max_len):
+                    start = i * max_len
+                    end = (i + 1) * max_len
                     if np.sum(y[start:end]) == 0:
                         continue
                     X_total.append(x[start:end, :, :])
                     y_total.append((y[start:end, :]))
 
     # balance_ratio = max_len / np.mean(seizure_len)
-    balance_ratio = 40
+    balance_ratio = 1
     print("Balanced Ratio : {}".format(balance_ratio))
     return np.asarray(X_total), np.asarray(y_total) * balance_ratio
 
@@ -60,7 +60,7 @@ def get_non_seizure_signal(test_patient, state_len):
         if x.shape[0] < state_len:
             continue
         print("Non Seizure node for initialization : {}".format(node))
-        start_point = x.shape[0]//2 - state_len//2
+        start_point = x.shape[0] // 2 - state_len // 2
         end_point = start_point + state_len
         x = x[start_point:end_point, :, :]
 
@@ -94,11 +94,12 @@ def make_train_label_classification(y_true):
     return np.asarray(y_class).astype('float32')
 
 
-def get_epilepsiae_seizures(mode, test_patient, dirname, max_len = 899):
+def get_epilepsiae_seizures(mode, test_patient, dirname, max_len=899):
     X_total = []
     y_total = []
     mode_dirname = "{}/{}".format(dirname, mode)
-    all_filenames = ["{}/{}".format(mode_dirname, x) for x in os.listdir(mode_dirname) if not x.startswith(str(test_patient))]
+    all_filenames = ["{}/{}".format(mode_dirname, x) for x in os.listdir(mode_dirname) if
+                     not x.startswith(str(test_patient))]
     for filename in all_filenames:
         with open(filename, 'rb') as pickle_file:
             data = pickle.load(pickle_file)
@@ -142,3 +143,19 @@ def get_epilepsiae_test(test_patient):
                 dataset[name] = {'data': x, 'label': y}
 
     return dataset
+
+
+def get_new_conv_w(state_len, max_window=6, state_dim=7):
+    channel_num = max_window+1
+    new_conv_weight = np.zeros((max_window * 2 + 1, 2 * state_dim, channel_num), dtype=np.float)
+
+    for ch in range(channel_num):
+        w_len = (ch * 2 + 1)
+        for i in range(w_len):
+            new_conv_weight[max_window + i - ch, w_len - 1 - i, ch] = 1.0 / (w_len * w_len)
+            new_conv_weight[max_window + i - ch, state_dim + i, ch] = 1.0 / (w_len * w_len)
+
+            new_conv_weight[max_window + i - ch, state_dim - 1, ch] = -2.0 / (w_len * state_len)
+            new_conv_weight[max_window + i - ch, 2 * state_dim - 1, ch] = -2.0 / (w_len * state_len)
+
+    return [new_conv_weight]
