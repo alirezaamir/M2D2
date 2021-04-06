@@ -1,7 +1,7 @@
 import pyedflib
 import tables
 import numpy as np
-from sklearn.preprocessing import  scale
+from sklearn.preprocessing import scale
 from utils.params import *
 import os
 import pickle
@@ -66,7 +66,7 @@ def read_edf_file(record_name, seizure_list):
     signals, signal_headers, header = pyedflib.highlevel.read_edf(edf_filename)
     T7F7, T8F8 = get_TxFx_channels(signal_headers)
     if T7F7 == 0 and T8F8 == 0:
-        np.zeros((0,3))
+        np.zeros((0, 3))
     print("Reading {}".format(record_name))
     channel1 = np.expand_dims(signals[T7F7], axis=1)
     channel2 = np.expand_dims(signals[T8F8], axis=1)
@@ -76,7 +76,7 @@ def read_edf_file(record_name, seizure_list):
     label = np.zeros((length, 1))
     if record_name in seizure_list:
         for start, end in seizure_list[record_name]:
-            label[start * FS: end*FS] = 1
+            label[start * FS: end * FS] = 1
             print("Start: {}, End: {}".format(start, end))
     eeg_data = np.concatenate((eeg_data, label), axis=1)
     return eeg_data
@@ -119,7 +119,7 @@ def epilepsiae():
             X = np.reshape(X, newshape=(-1, SEG_N, 2))
 
             Xw = {}
-            Xw["train"], Xw["valid"] = train_test_split(X, test_size = 0.1, random_state = 42)
+            Xw["train"], Xw["valid"] = train_test_split(X, test_size=0.1, random_state=42)
 
             output_dict = {"X": [], "y": []}
             for mode in ["train", "valid"]:
@@ -128,7 +128,7 @@ def epilepsiae():
                     os.makedirs(dirname)
                 filename = "{}/{}.pickle".format(dirname, pat)
                 with open(filename, 'wb') as pickle_file:
-                    output_dict["X"]= Xw[mode]
+                    output_dict["X"] = Xw[mode]
                     if label == 'non_seiz':
                         output_dict["y"] = np.zeros(shape=(Xw[mode].shape[0]))
                     else:
@@ -169,14 +169,27 @@ def epilepsiae_seizures():
                     pickle.dump(output_dict, pickle_file)
 
 
-def get_epilepsiae_non_seizure(test_patient, state_len):
-    with open("../input/GAN_data/seizure.json") as json_file:
+def get_epilepsiae_non_seizure(test_patient, state_len, root='..'):
+    dirname = "{}/temp/vae_mmd_data/{}/{}".format(root, SEG_N, "epilepsiae_non_seizure")
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
+    with open("{}/input/GAN_data/seizure.json".format(root)) as json_file:
         seizure_files = json.load(json_file)
-        root_path = "../input/GAN_data/{}".format(test_patient)
+        root_path = "{}/input/GAN_data/{}".format(root, test_patient)
         all_filenames = [x for x in os.listdir(root_path) if x.split('.')[0][5:] not in seizure_files[test_patient]]
-        random_filenames = np.random.permutation(all_filenames)
+        # random_filenames = np.random.permutation(all_filenames)
+        random_filenames = all_filenames
         for filename in random_filenames:
             random_filename = filename.split('.')[0][5:]
+            if random_filename == "":
+                continue
+            if os.path.isfile("{}/train/{}.pickle".format(dirname, random_filename)) or \
+                    os.path.isfile("{}/valid/{}.pickle".format(dirname, random_filename)) or \
+                    os.path.isfile("{}/{}.pickle".format(dirname, random_filename)):
+                print("File {} exists".format(random_filename))
+                continue
+
+            print("Processing {} ...".format(random_filename))
             data = []
             for channel in ["T3F7", "T4F8"]:
                 xlsx_file = "{}/{}_{}.xlsx".format(root_path, channel, random_filename)
@@ -188,10 +201,6 @@ def get_epilepsiae_non_seizure(test_patient, state_len):
             data = np.transpose(data)
             X_normal = np.asarray(data)
 
-
-            dirname = "../temp/vae_mmd_data/{}/{}".format(SEG_N, "epilepsiae_non_seizure")
-            if not os.path.exists(dirname):
-                os.makedirs(dirname)
             out_filename = "{}/{}.pickle".format(dirname, random_filename)
             output_dict = {"X": [], "y": []}
             with open(out_filename, 'wb') as pickle_file:
@@ -202,18 +211,19 @@ def get_epilepsiae_non_seizure(test_patient, state_len):
                     output_dict["y"].append(y)
                 print("Filename: {}, X shape:{}".format(random_filename, np.array(output_dict["X"]).shape))
                 pickle.dump(output_dict, pickle_file)
-            x = np.array(output_dict["X"])
-            if x.shape[0] < state_len:
-                continue
-
-            start_point = x.shape[0] // 2 - state_len // 2
-            end_point = start_point + state_len
-            x = x[start_point:end_point, :, :]
-
-            return np.expand_dims(x, 0)
+            # x = np.array(output_dict["X"])
+            # if x.shape[0] < state_len:
+            #     continue
+            #
+            # start_point = x.shape[0] // 2 - state_len // 2
+            # end_point = start_point + state_len
+            # x = x[start_point:end_point, :, :]
+            #
+            # return np.expand_dims(x, 0)
 
 
 if __name__ == '__main__':
     # main()
-    epilepsiae_seizures()
-    # get_epilepsiae_non_seizure('pat_102')
+    # epilepsiae_seizures()
+    for pat in pat_list:
+        get_epilepsiae_non_seizure(pat, 300, root='../..')
