@@ -3,6 +3,7 @@ import sys
 import logging
 import matplotlib
 import json
+import gc
 
 matplotlib.use("Agg")
 sys.path.append("../")
@@ -54,7 +55,7 @@ def main():
     ==========================""".format(arch, beta, decay, latent_dim, lr)
     LOG.info("Training Model with parameters:{}".format(param_str))
 
-    build_model = vae_model.build_ae_model
+    build_model = vae_model.build_model
     root = "../output/vae/{}".format(arch)
     stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}"
     dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay, gamma, test_patient)
@@ -95,7 +96,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     scheduler = LearningRateScheduler(lambda x, y: lr_init * np.exp(-decay * x))
     beta_annealing = AnnealingCallback(beta, beta_start_epoch, max_epochs)
 
-    all_filenames = get_all_filenames(entire_dataset=False)
+    all_filenames = get_all_filenames(entire_dataset=True)
     print(all_filenames["train"][test_patient])
     savedir = dirname + '/saved_model/'
     if not os.path.exists(savedir):
@@ -106,7 +107,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     if not os.path.exists(savedir):
         os.makedirs(savedir)
 
-    for iter in range(12):
+    for iter in range(15):
         train_data, train_label = get_dataset("train", test_patient, all_filenames)
         print("Shape :{}, {}".format(train_data.shape, train_label.shape))
         valid_data, valid_label = get_dataset("valid", test_patient, all_filenames)
@@ -119,6 +120,9 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
                   callbacks=[early_stopping, history, scheduler, beta_annealing]
         )
         model.save_weights(savedir, save_format='tf')
+        del train_data, valid_data
+        gc.collect()
+
 
 
 def build_dataset_chb(mode, test_patient, all_filenames):
