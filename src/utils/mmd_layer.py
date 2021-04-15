@@ -40,7 +40,7 @@ class MMDLayer(tf.keras.layers.Layer):
 
     def get_masked_sum(self, input_array, th):
         time_steps = tf.range(start=0, limit=self.state_len, dtype=tf.float32)
-        sigmoid = tf.sigmoid(time_steps - th)
+        sigmoid = tf.sigmoid(time_steps - th - 0.5)
         masked_inside = tf.multiply(input_array, 1 - sigmoid)
         inside_sum = tf.reduce_sum(masked_inside, axis=1, keepdims=True)
         # average = tf.divide(inside_sum, th)
@@ -53,10 +53,10 @@ class MMDLayer(tf.keras.layers.Layer):
         # Output
         tile_dim = tf.constant([1, self.state_len, 1], dtype=tf.int32)
         z_tile = tf.tile(z_t, tile_dim)
-        diff = tf.subtract(z_tile, d_t1)
-        diff2 = tf.pow(diff, 2)
-        sum = tf.reduce_sum(diff2, axis=2)
-        gamma = tf.multiply(-1/self.latent_dim, sum)
+        dot = tf.multiply(z_tile, d_t1)
+        # diff2 = tf.pow(diff, 2)
+        sum = tf.reduce_sum(dot, axis=2)
+        gamma = tf.multiply(1/self.latent_dim, sum)
         coeff = tf.add(1.0, gamma)
         poly = tf.pow(coeff, 3)
 
