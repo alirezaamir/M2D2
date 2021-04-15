@@ -3,6 +3,7 @@ import os
 from utils import vae_model
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
+from tensorflow.keras.callbacks import EarlyStopping, CSVLogger
 from sklearn.metrics.pairwise import polynomial_kernel
 import pickle
 import logging
@@ -55,7 +56,7 @@ def main():
 
     print(encoder.summary())
 
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/vae_interval_v28".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/vae_less_v30".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -65,7 +66,7 @@ def main():
     middle_diff = []
     all_filenames = get_all_filenames(entire_dataset=False)
     # input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in range(1,25): #["-1"]:  # range(30):  # range(1,25):
+    for test_id in range(1,24): #["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
         test_patient = str(test_id)
         train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN)
@@ -75,33 +76,38 @@ def main():
         # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN)
 
         # Load the specific weights for the model
-        load_dirname = root + stub.format(SEG_LENGTH, beta, LATENT_DIM, lr, decay, gamma, test_patient)
-        if not os.path.exists(load_dirname):
-            print("Model does not exist in {}".format(load_dirname))
-            exit()
-        model.load_weights(load_dirname)
+        # load_dirname = root + stub.format(SEG_LENGTH, beta, LATENT_DIM, lr, decay, gamma, test_patient)
+        # if not os.path.exists(load_dirname):
+        #     print("Model does not exist in {}".format(load_dirname))
+        #     exit()
+        # model.load_weights(load_dirname)
 
         vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
 
-        print(vae_mmd_model.summary())
-        for layer_num in range(12):  # 13 for VAE, 10 for AE
-            print("layer {}, {}, {}".format(layer_num, encoder.layers[layer_num].name, vae_mmd_model.layers[layer_num].name))
-            weights = encoder.layers[layer_num].get_weights()
-            vae_mmd_model.layers[layer_num].set_weights(weights)
-
-        # weights = encoder.get_layer('z').get_weights()
-        # vae_mmd_model.get_layer('z').set_weights(weights)
-        weights = encoder.get_layer('sigma').get_weights()
-        vae_mmd_model.get_layer('sigma').set_weights(weights)
+        # print(vae_mmd_model.summary())
+        # for layer_num in range(12):  # 13 for VAE, 10 for AE
+        #     print("layer {}, {}, {}".format(layer_num, encoder.layers[layer_num].name, vae_mmd_model.layers[layer_num].name))
+        #     weights = encoder.layers[layer_num].get_weights()
+        #     vae_mmd_model.layers[layer_num].set_weights(weights)
+        #
+        # # weights = encoder.get_layer('z').get_weights()
+        # # vae_mmd_model.get_layer('z').set_weights(weights)
+        # weights = encoder.get_layer('sigma').get_weights()
+        # vae_mmd_model.get_layer('sigma').set_weights(weights)
 
         conv_weight = get_new_conv_w(state_len=STATE_LEN, max_window=5, state_dim=12)
         vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
+        early_stopping = EarlyStopping(
+            monitor="loss", patience=50, restore_best_weights=True)
+        history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
+
         print("input shape: {}".format(train_data.shape))
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='mse')
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(learning_rate=0.0001), loss='mse')
         vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=80)
+                          validation_data=(val_data, val_label), batch_size=1, epochs=100,
+                          callbacks=[early_stopping, history])
 
             # non_seizure_signals = get_epilepsiae_non_seizure(test_patient, STATE_LEN)
             # intermediate_model = tf.keras.models.Model(inputs=vae_mmd_model.inputs,
@@ -114,7 +120,7 @@ def main():
             os.makedirs(savedir)
         vae_mmd_model.save(savedir)
 
-        diffs, _ = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname)
+        diffs, _ = inference(int(test_patient), trained_model=vae_mmd_model, subdirname=subdirname)
         middle_diff += diffs
 
     print(middle_diff)
@@ -170,7 +176,8 @@ def inference(test_patient, trained_model, subdirname):
             input_random = np.random.randn(X_section.shape[0], X_section.shape[1], 16)
             mmd_predicted = vae_mmd_model.predict([X_section, input_random])
             print("Predict : {}".format(mmd_predicted.shape))
-            mmd_maximum = [np.argmax(mmd_predicted)]
+            mmd_edge_free = mmd_predicted[:,10:-10, :]
+            mmd_maximum = [np.argmax(mmd_edge_free) + 10]
             name = "{}_{}".format(node, section)
             plot_mmd(mmd_predicted[0, :, 0], mmd_maximum, y_true_section, name, subdirname)
 
@@ -199,7 +206,7 @@ def inference(test_patient, trained_model, subdirname):
 
 def get_results():
     arch = 'vae_sup_chb'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/vae_interval_v28".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/vae_less_v30".format(SEG_LENGTH, arch)
     diffs = []
     nc = {}
     for pat_id in range(1, 24):
