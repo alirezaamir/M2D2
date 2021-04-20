@@ -29,9 +29,8 @@ def dataset_training(mode, test_patient, all_filenames, max_len=899):
                 y = np.pad(y, pad_width=[(0, diff), (0, 0)], constant_values=0)
                 y_total.append(y)
             elif x.shape[0] > max_len:
-                for i in range(x.shape[0] // max_len):
-                    start = i * max_len
-                    end = (i + 1) * max_len
+                for start in range(0, x.shape[0] - max_len, (max_len//4)):
+                    end = start + max_len
                     if np.sum(y[start:end]) == 0:
                         continue
                     X_total.append(x[start:end, :, :])
