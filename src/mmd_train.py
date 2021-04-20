@@ -34,7 +34,7 @@ LATENT_DIM = 32
 
 
 def main():
-    arch = 'vae_sup_chb'
+    arch = 'vae_free'
     beta = 1e-05
     lr = 0.0001
     decay = 0.02
@@ -56,7 +56,7 @@ def main():
 
     print(encoder.summary())
 
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/vae_less_v30".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/binary_ce_v32".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -104,16 +104,16 @@ def main():
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
         print("input shape: {}".format(train_data.shape))
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(learning_rate=0.0001), loss='mse')
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(learning_rate=0.0001), loss='binary_crossentropy')
         vae_mmd_model.fit(x=train_data, y=train_label,
                           validation_data=(val_data, val_label), batch_size=1, epochs=100,
                           callbacks=[early_stopping, history])
 
-            # non_seizure_signals = get_epilepsiae_non_seizure(test_patient, STATE_LEN)
-            # intermediate_model = tf.keras.models.Model(inputs=vae_mmd_model.inputs,
-            #                                            outputs=vae_mmd_model.get_layer('latents').output)
-            # z_non_seiz = intermediate_model.predict(x=[non_seizure_signals, train_random[:1, :STATE_LEN, :]])
-            # vae_mmd_model.get_layer('MMD').set_weights(weights=[z_non_seiz[0, :, 0, :], z_non_seiz[0, :, 0, :]])
+        # non_seizure_signals = get_epilepsiae_non_seizure(test_patient, STATE_LEN)
+        # intermediate_model = tf.keras.models.Model(inputs=vae_mmd_model.inputs,
+        #                                            outputs=vae_mmd_model.get_layer('latents').output)
+        # z_non_seiz = intermediate_model.predict(x=[non_seizure_signals, train_random[:1, :STATE_LEN, :]])
+        # vae_mmd_model.get_layer('MMD').set_weights(weights=[z_non_seiz[0, :, 0, :], z_non_seiz[0, :, 0, :]])
 
         savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
         if not os.path.exists(savedir):
@@ -252,6 +252,6 @@ def across_dataset():
 
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    # main()
-    get_results()
+    main()
+    # get_results()
     # across_dataset()
