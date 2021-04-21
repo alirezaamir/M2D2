@@ -170,14 +170,19 @@ def inference(test_patient, trained_model, subdirname):
             # X_section = X[SEQ_LEN*section:SEQ_LEN*(section+1)]
 
             X_section = X
-            y_true_section = y_true
+            y_true_section = np.concatenate((np.zeros(STATE_LEN), y_true, np.zeros(STATE_LEN)))
             X_section = np.expand_dims(X_section, 0)
+            print("X Shape: {}".format(X_section.shape))
+            X_edge = get_non_seizure_signal(test_patient, state_len=STATE_LEN)
+            print("Edge Shape: {}".format(X_edge.shape))
+            concatenated = np.concatenate((X_edge, X_section, X_edge), axis=1)
+            print("Concatenate Shape: {}".format(concatenated.shape))
+            X_section = concatenated
 
-            input_random = np.random.randn(X_section.shape[0], X_section.shape[1], 16)
-            mmd_predicted = vae_mmd_model.predict([X_section, input_random])
+            mmd_predicted = vae_mmd_model.predict(X_section)
             print("Predict : {}".format(mmd_predicted.shape))
-            mmd_edge_free = mmd_predicted[:,10:-10, :]
-            mmd_maximum = [np.argmax(mmd_edge_free) + 10]
+            mmd_edge_free = mmd_predicted[:,STATE_LEN:-STATE_LEN, :]
+            mmd_maximum = [np.argmax(mmd_edge_free) + STATE_LEN]
             name = "{}_{}".format(node, section)
             plot_mmd(mmd_predicted[0, :, 0], mmd_maximum, y_true_section, name, subdirname)
 
@@ -197,7 +202,7 @@ def inference(test_patient, trained_model, subdirname):
 
             t_diff = np.abs(accepted_points - mmd_maximum[0])
             LOG.info("Time diff : {}".format(np.min(t_diff)))
-            if np.max(mmd_predicted) < 0.001:
+            if 0 < np.max(mmd_predicted) < 0.001:
                 not_detected[node] = (np.max(mmd_predicted), np.min(t_diff))
             else:
                 middle_diff.append(np.min(t_diff))
@@ -205,8 +210,8 @@ def inference(test_patient, trained_model, subdirname):
 
 
 def get_results():
-    arch = 'vae_sup_chb'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/vae_less_v30".format(SEG_LENGTH, arch)
+    arch = 'vae_free'
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/binary_ce_v32".format(SEG_LENGTH, arch)
     diffs = []
     nc = {}
     for pat_id in range(1, 24):
@@ -252,6 +257,6 @@ def across_dataset():
 
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    main()
-    # get_results()
+    # main()
+    get_results()
     # across_dataset()
