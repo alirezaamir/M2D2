@@ -56,7 +56,7 @@ def main():
 
     print(encoder.summary())
 
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/binary_ce_v32".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/edge_train_v35".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -69,10 +69,10 @@ def main():
     for test_id in range(1,24): #["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
         test_patient = str(test_id)
-        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN)
+        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=STATE_LEN)
         # train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN)
         # print("Label {}, Max {}".format(train_label.shape, np.max(train_label)))
-        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN)
+        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=STATE_LEN)
         # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN)
 
         # Load the specific weights for the model
@@ -106,14 +106,8 @@ def main():
         print("input shape: {}".format(train_data.shape))
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(learning_rate=0.0001), loss='binary_crossentropy')
         vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=100,
+                          validation_data=(val_data, val_label), batch_size=1, epochs=80,
                           callbacks=[early_stopping, history])
-
-        # non_seizure_signals = get_epilepsiae_non_seizure(test_patient, STATE_LEN)
-        # intermediate_model = tf.keras.models.Model(inputs=vae_mmd_model.inputs,
-        #                                            outputs=vae_mmd_model.get_layer('latents').output)
-        # z_non_seiz = intermediate_model.predict(x=[non_seizure_signals, train_random[:1, :STATE_LEN, :]])
-        # vae_mmd_model.get_layer('MMD').set_weights(weights=[z_non_seiz[0, :, 0, :], z_non_seiz[0, :, 0, :]])
 
         savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
         if not os.path.exists(savedir):
@@ -138,13 +132,7 @@ def inference(test_patient, trained_model, subdirname):
     if trained_model is None:
         save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
         trained_model = tf.keras.models.load_model(save_path)
-
-        vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
-                                                seq_len=None, trainable_vae=True)
-
-        for layer_num in range(len(vae_mmd_model.layers)):
-            weights = trained_model.layers[layer_num].get_weights()
-            vae_mmd_model.layers[layer_num].set_weights(weights)
+        vae_mmd_model = trained_model
     else:
         vae_mmd_model = trained_model
 

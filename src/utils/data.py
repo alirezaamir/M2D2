@@ -5,12 +5,14 @@ import pandas as pd
 import os
 
 
-def dataset_training(mode, test_patient, all_filenames, max_len=899):
+def dataset_training(mode, test_patient, all_filenames, max_len=899, state_len=300):
     X_total = []
     y_total = []
     seizure_len = []
 
     for filename in all_filenames[mode][test_patient]:
+        file_pat = int(filename.split('/')[-1][3:5])
+
         with open(filename, "rb") as pickle_file:
             data = pickle.load(pickle_file)
             x = np.array(data["X"])
@@ -20,21 +22,32 @@ def dataset_training(mode, test_patient, all_filenames, max_len=899):
             seizure_len.append(np.sum(y))
             y = np.expand_dims(y, -1)
             if x.shape[0] == max_len:
-                X_total.append(x)
-                y_total.append(y)
+                x_selected = x
+                y_selected = y
             elif x.shape[0] < max_len:
                 diff = max_len - x.shape[0]
                 x = np.pad(x, pad_width=[(0, diff), (0, 0), (0, 0)], constant_values=0)
-                X_total.append(x)
+                x_selected = x
                 y = np.pad(y, pad_width=[(0, diff), (0, 0)], constant_values=0)
-                y_total.append(y)
+                y_selected = y
             elif x.shape[0] > max_len:
                 for start in range(0, x.shape[0] - max_len, (max_len//4)):
                     end = start + max_len
                     if np.sum(y[start:end]) == 0:
                         continue
-                    X_total.append(x[start:end, :, :])
-                    y_total.append((y[start:end, :]))
+                    x_selected = x[start:end, :, :]
+                    y_selected = y[start:end]
+
+            x_edge = get_non_seizure_signal(file_pat, state_len)
+            x_edge = np.squeeze(x_edge, axis=0)
+            concatenated = np.concatenate((x_edge,x_selected, x_edge), axis=0)
+            X_total.append(concatenated)
+
+            y_true_section = np.concatenate((np.zeros((state_len, 1), dtype=np.float32),
+                                             y_selected,
+                                             np.zeros((state_len, 1), dtype=np.float32)))
+            y_total.append(y_true_section)
+
 
     # balance_ratio = max_len / np.mean(seizure_len)
     balance_ratio = 1
