@@ -28,7 +28,7 @@ SEG_LENGTH = 1024
 EXCLUDED_SIZE = 15
 interval_len = 4
 SEQ_LEN = 899
-STATE_LEN = 300
+STATE_LEN = 899
 LATENT_DIM = 32
 
 
@@ -55,7 +55,7 @@ def main():
 
     print(encoder.summary())
 
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_v36".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/chb_full_copyz_v39".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -63,18 +63,18 @@ def main():
     # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
     middle_diff = []
-    all_filenames = get_all_filenames(entire_dataset=False)
+    all_filenames = get_all_filenames(entire_dataset=True)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in range(30):  # ["-1"]:  # range(30):  # range(1,24):
-        test_patient = pat_list[test_id]
-        # test_patient = str(test_id)
-        # train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=STATE_LEN)
-        train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN,
-                                                          state_len=20)
+    for test_id in ["-1"]:  # ["-1"]:  # range(30):  # range(1,24):
+        # test_patient = pat_list[test_id]
+        test_patient = str(test_id)
+        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=15)
+        # train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN,
+        #                                                   state_len=20)
         # print("Label {}, Max {}".format(train_label.shape, np.max(train_label)))
-        # val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=STATE_LEN)
-        val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN,
-                                                      state_len=20)
+        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=15)
+        # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN,
+        #                                               state_len=20)
 
         # Load the specific weights for the model
         # load_dirname = root + stub.format(SEG_LENGTH, beta, LATENT_DIM, lr, decay, gamma, test_patient)
@@ -86,17 +86,17 @@ def main():
         vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
 
-        # conv_weight = get_new_conv_w(state_len=STATE_LEN, max_window=6, state_dim=14)
-        # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
+        conv_weight = get_new_conv_w(state_len=STATE_LEN, max_window=6, state_dim=14)
+        vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
         early_stopping = EarlyStopping(
-            monitor="loss", patience=10, restore_best_weights=True)
+            monitor="loss", patience=50, restore_best_weights=True)
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
         print("input shape: {}".format(train_data.shape))
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(), loss='binary_crossentropy')
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Nadam(), loss='binary_crossentropy')
         vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=20,
+                          validation_data=(val_data, val_label), batch_size=1, epochs=80,
                           callbacks=[early_stopping, history])
 
         savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
@@ -104,14 +104,13 @@ def main():
             os.makedirs(savedir)
         vae_mmd_model.save(savedir)
 
-        diffs, _ = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname)
-        middle_diff += diffs
+        # diffs, _ = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname)
+        # middle_diff += diffs
 
-    print(middle_diff)
-    plt.figure()
-    plt.hist(middle_diff)
-    plt.savefig("{}/hist_diff.png".format(subdirname))
-    # plt.show()
+    # print(middle_diff)
+    # plt.figure()
+    # plt.hist(middle_diff)
+    # plt.savefig("{}/hist_diff.png".format(subdirname))
 
 
 def inference(test_patient, trained_model, subdirname):

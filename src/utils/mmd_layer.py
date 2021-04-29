@@ -80,7 +80,8 @@ class MMDLayer(tf.keras.layers.Layer):
         # rbf = tf.exp(gamma)
 
         # Updating the state
-        concatenated = tf.concat([z_t, d_t1], axis=1)
+        copy_z = tf.stop_gradient(z_t)
+        concatenated = tf.concat([copy_z, d_t1], axis=1)
         sliced = tf.slice(concatenated, [0, 0, 0], [1, self.state_len, self.latent_dim])
         d_t = tf.squeeze(sliced, axis=0)
 

@@ -162,7 +162,7 @@ def get_mmd_model(state_len=None,
                                       trainable=False)(mmd)
     gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=25, return_sequences=True), name='GRU')(interval)
     dense1 = tf.keras.layers.Dense(150, activation='relu', name='dense1')(gru)
-    final_dense = tf.keras.layers.Dense(1, activation=None, name='final_dense')(dense1)
+    final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense1)
 
     model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
     model.add_loss(tf.reduce_mean(tf.abs(z)) * 1e-4)
