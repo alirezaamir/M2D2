@@ -3,6 +3,7 @@ import pickle
 from vae_mmd import build_dataset_pickle as test_dataset
 import pandas as pd
 import os
+from utils.params import SEG_N
 
 
 def dataset_training(mode, test_patient, all_filenames, max_len=899, state_len=300):
@@ -80,6 +81,24 @@ def get_non_seizure_signal(test_patient, state_len):
     return np.random.randn(state_len)
 
 
+def get_epilepsiae_non_seizure(test_patient, state_len):
+    dirname = "../temp/vae_mmd_data/{}/{}/{}".format(SEG_N, "epilepsiae_non_seizure", test_patient)
+    all_filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname)]
+    random_filenames = np.random.permutation(all_filenames)
+    for filename in random_filenames:
+        with open(filename, 'rb') as pickle_file:
+            data = pickle.load(pickle_file)
+            x = np.array(data["X"])
+            if x.shape[0] < state_len:
+                continue
+
+            start_point = x.shape[0] // 2 - state_len // 2
+            end_point = start_point + state_len
+            x = x[start_point:end_point, :, :]
+
+            return np.expand_dims(x, 0)
+
+
 def make_train_label_bbox(y_true):
     y_true = np.squeeze(y_true)
     y_non_zero = np.where(y_true > 0, 1, 0)
@@ -106,13 +125,15 @@ def make_train_label_classification(y_true):
     return np.asarray(y_class).astype('float32')
 
 
-def get_epilepsiae_seizures(mode, test_patient, dirname, max_len=899):
+def get_epilepsiae_seizures(mode, test_patient, dirname, max_len=899, state_len = 300):
     X_total = []
     y_total = []
     mode_dirname = "{}/{}".format(dirname, mode)
     all_filenames = ["{}/{}".format(mode_dirname, x) for x in os.listdir(mode_dirname) if
                      not x.startswith(str(test_patient))]
     for filename in all_filenames:
+        file_pickle_name = filename.split('/')[-1]
+        file_pat = "pat_{}".format(file_pickle_name.split('_')[1])
         with open(filename, 'rb') as pickle_file:
             data = pickle.load(pickle_file)
             x = np.array(data["X"])
@@ -120,23 +141,32 @@ def get_epilepsiae_seizures(mode, test_patient, dirname, max_len=899):
 
             y = np.expand_dims(y, -1)
             if x.shape[0] == max_len:
-                X_total.append(x)
-                y_total.append(y)
+                x_selected = x
+                y_selected = y
             elif x.shape[0] < max_len:
                 diff = max_len - x.shape[0]
                 x = np.pad(x, pad_width=[(0, diff), (0, 0), (0, 0)], constant_values=0)
-                X_total.append(x)
                 y = np.pad(y, pad_width=[(0, diff), (0, 0)], constant_values=0)
-                y_total.append(y)
+                x_selected = x
+                y_selected = y
             elif x.shape[0] > max_len:
                 for i in range(x.shape[0] // max_len):
                     start = i * max_len
                     end = (i + 1) * max_len
                     if np.sum(y[start:end]) == 0:
                         continue
-                    X_total.append(x[start:end, :, :])
-                    y_total.append((y[start:end, :]))
+                    x_selected = x[start:end, :, :]
+                    y_selected = y[start:end, :]
 
+            x_edge = get_epilepsiae_non_seizure(file_pat, state_len)
+            x_edge = np.squeeze(x_edge, axis=0)
+            concatenated = np.concatenate((x_edge, x_selected, x_edge), axis=0)
+            X_total.append(concatenated)
+
+            y_true_section = np.concatenate((np.zeros((state_len, 1), dtype=np.float32),
+                                             y_selected,
+                                             np.zeros((state_len, 1), dtype=np.float32)))
+            y_total.append(y_true_section)
     return np.asarray(X_total), np.asarray(y_total)
 
 

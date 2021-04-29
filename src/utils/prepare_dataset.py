@@ -169,7 +169,7 @@ def epilepsiae_seizures():
                     pickle.dump(output_dict, pickle_file)
 
 
-def get_epilepsiae_non_seizure(test_patient, state_len, root='..'):
+def epilepsiae2pickle(test_patient, root):
     dirname = "{}/temp/vae_mmd_data/{}/{}".format(root, SEG_N, "epilepsiae_non_seizure")
     if not os.path.exists(dirname):
         os.makedirs(dirname)
@@ -177,8 +177,7 @@ def get_epilepsiae_non_seizure(test_patient, state_len, root='..'):
         seizure_files = json.load(json_file)
         root_path = "{}/input/GAN_data/{}".format(root, test_patient)
         all_filenames = [x for x in os.listdir(root_path) if x.split('.')[0][5:] not in seizure_files[test_patient]]
-        # random_filenames = np.random.permutation(all_filenames)
-        random_filenames = all_filenames
+        random_filenames = np.random.permutation(all_filenames)
         for filename in random_filenames:
             random_filename = filename.split('.')[0][5:]
             if random_filename == "":
@@ -211,19 +210,10 @@ def get_epilepsiae_non_seizure(test_patient, state_len, root='..'):
                     output_dict["y"].append(y)
                 print("Filename: {}, X shape:{}".format(random_filename, np.array(output_dict["X"]).shape))
                 pickle.dump(output_dict, pickle_file)
-            # x = np.array(output_dict["X"])
-            # if x.shape[0] < state_len:
-            #     continue
-            #
-            # start_point = x.shape[0] // 2 - state_len // 2
-            # end_point = start_point + state_len
-            # x = x[start_point:end_point, :, :]
-            #
-            # return np.expand_dims(x, 0)
 
 
 if __name__ == '__main__':
     # main()
     # epilepsiae_seizures()
     for pat in pat_list:
-        get_epilepsiae_non_seizure(pat, 300, root='../..')
+        epilepsiae2pickle(pat, root='../..')
