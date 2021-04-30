@@ -142,7 +142,7 @@ def get_mmd_model(state_len=None,
                   trainable_vae=True):
     input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 2))
     x = input_signal
-    num_conv_layers = 3
+    num_conv_layers = 4
     for i in range(num_conv_layers):
         x = layers.TimeDistributed(layers.Conv1D(8, 3, padding="same", activation="relu", trainable=trainable_vae),
                                    name="conv1d_{}_1".format(i+1))(x)
