@@ -39,16 +39,19 @@ def dataset_training(mode, test_patient, all_filenames, max_len=899, state_len=3
                     x_selected = x[start:end, :, :]
                     y_selected = y[start:end]
 
-            x_edge = get_non_seizure_signal(file_pat, state_len)
-            x_edge = np.squeeze(x_edge, axis=0)
-            concatenated = np.concatenate((x_edge,x_selected, x_edge), axis=0)
-            X_total.append(concatenated)
+            if state_len is None:
+                X_total.append(x_selected)
+                y_total.append(y_selected)
+            else:
+                x_edge = get_non_seizure_signal(file_pat, state_len)
+                x_edge = np.squeeze(x_edge, axis=0)
+                concatenated = np.concatenate((x_edge,x_selected, x_edge), axis=0)
+                X_total.append(concatenated)
 
-            y_true_section = np.concatenate((np.zeros((state_len, 1), dtype=np.float32),
-                                             y_selected,
-                                             np.zeros((state_len, 1), dtype=np.float32)))
-            y_total.append(y_true_section)
-
+                y_true_section = np.concatenate((np.zeros((state_len, 1), dtype=np.float32),
+                                                 y_selected,
+                                                 np.zeros((state_len, 1), dtype=np.float32)))
+                y_total.append(y_true_section)
 
     # balance_ratio = max_len / np.mean(seizure_len)
     balance_ratio = 1
@@ -187,17 +190,16 @@ def get_epilepsiae_test(test_patient):
     return dataset
 
 
-def get_new_conv_w(state_len, max_window=6, state_dim=7):
-    channel_num = max_window+1
-    new_conv_weight = np.zeros((max_window * 2 + 1, 2 * state_dim, channel_num), dtype=np.float)
+def get_new_conv_w(state_len, N=6, state_dim=7):
+    new_conv_weight = np.zeros((N * 2 + 1, 2 * state_dim, N+1), dtype=np.float)
 
-    for ch in range(channel_num):
+    for ch in range(N+1):
         w_len = (ch * 2 + 1)
-        for i in range(w_len):
-            new_conv_weight[max_window + i - ch, w_len - 1 - i, ch] = 1.0 / (w_len * w_len)
-            new_conv_weight[max_window + i - ch, state_dim + i, ch] = 1.0 / (w_len * w_len)
+        for i in range(ch * 2 + 1):
+            new_conv_weight[N + i - ch, ch * 2 - i, ch] = 1.0 / (w_len * w_len)
+            new_conv_weight[N + i - ch, state_dim + i, ch] = 1.0 / (w_len * w_len)
 
-            new_conv_weight[max_window + i - ch, state_dim - 1, ch] = -2.0 / (w_len * state_len)
-            new_conv_weight[max_window + i - ch, 2 * state_dim - 1, ch] = -2.0 / (w_len * state_len)
+            new_conv_weight[N + i - ch, state_dim - 1, ch] = -1.0 / (w_len * state_len)
+            new_conv_weight[N + i - ch, 2 * state_dim - 1, ch] = -1.0 / (w_len * state_len)
 
     return [new_conv_weight]
