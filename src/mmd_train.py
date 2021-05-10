@@ -202,7 +202,7 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'conventional_v43'
+    source_model = 'z_minus1_v52'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
@@ -216,7 +216,7 @@ def across_dataset():
     for pat_id in range(30):
         # pat = pat_id
         pat = pat_list[pat_id]
-        diff_pat, not_detected_pat = inference(pat, trained_model, subdirname)
+        diff_pat, not_detected_pat = inference(pat, trained_model, subdirname, dataset='Epilepsiae')
         diffs += diff_pat
         nc.update(not_detected_pat)
     print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
@@ -230,5 +230,5 @@ def across_dataset():
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
     # main()
-    get_results()
-    # across_dataset()
+    # get_results()
+    across_dataset()
