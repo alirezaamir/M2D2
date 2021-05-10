@@ -34,7 +34,7 @@ LATENT_DIM = 32
 
 def main():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/smallest_GRU_v48".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/Sigma0_v51".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -44,7 +44,7 @@ def main():
     middle_diff = []
     all_filenames = get_all_filenames(entire_dataset=False)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in [1, 3, 9,12, 13, 14]:  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in [1, 3, 8, 9, 12, 13]:  # ["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
         test_patient = str(test_id)
         train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=14)
