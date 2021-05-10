@@ -34,7 +34,7 @@ LATENT_DIM = 32
 
 def main():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/Sigma0_v51".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -44,14 +44,14 @@ def main():
     middle_diff = []
     all_filenames = get_all_filenames(entire_dataset=False)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in [1, 3, 8, 9, 12, 13]:  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in [15, 16]:  # ["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
         test_patient = str(test_id)
-        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=14)
+        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
         # train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN,
         #                                                   state_len=STATE_LEN)
         # print("Label {}, Max {}".format(train_label.shape, np.max(train_label)))
-        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=14)
+        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
         # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN,
         #                                               state_len=STATE_LEN)
 
@@ -78,7 +78,7 @@ def main():
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='binary_crossentropy')
 
         vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=25,
+                          validation_data=(val_data, val_label), batch_size=1, epochs=40,
                           callbacks=[early_stopping, history])
             # for layer in vae_mmd_model.layers:
             #     print("name : {}".format(layer.name))
@@ -115,7 +115,7 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
         vae_mmd_model = trained_model
     else:
         vae_mmd_model = trained_model
-
+    print(vae_mmd_model.summary())
     for node in sessions.keys():
         # patient_num = int(node[3:5])
         # if test_patient != patient_num:
@@ -139,7 +139,8 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
             # y_true_section = np.concatenate((np.zeros(STATE_LEN), y_true_section, np.zeros(STATE_LEN)))
 
             X_section = X
-            y_true_section = np.concatenate((np.zeros(STATE_LEN), y_true, np.zeros(STATE_LEN)))
+            # y_true_section = np.concatenate((np.zeros(STATE_LEN), y_true, np.zeros(STATE_LEN)))
+            y_true_section = y_true
 
             X_section = np.expand_dims(X_section, 0)
             print("X Shape: {}".format(X_section.shape))
@@ -153,9 +154,9 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
             mmd_predicted = vae_mmd_model.predict(X_section)
             print("Predict : {}".format(mmd_predicted.shape))
             mmd_edge_free = mmd_predicted[:, STATE_LEN:-STATE_LEN, :]
-            mmd_maximum = [np.argmax(mmd_edge_free) + STATE_LEN]
+            mmd_maximum = [np.argmax(mmd_edge_free)]
             name = "{}_{}".format(node, section)
-            plot_mmd(mmd_predicted[0, :, 0], mmd_maximum, y_true_section, name, subdirname)
+            plot_mmd(mmd_edge_free[0, :, 0], mmd_maximum, y_true_section, name, subdirname)
 
             y_non_zero = np.where(y_true_section > 0, 1, 0)
             y_non_zero = np.concatenate((y_non_zero, [0]))
@@ -182,7 +183,7 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
 
 def get_results():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/sign_v46".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(SEG_LENGTH, arch)
     diffs = []
     nc = {}
     for pat_id in range(1, 24):
@@ -228,6 +229,6 @@ def across_dataset():
 
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    main()
-    # get_results()
+    # main()
+    get_results()
     # across_dataset()

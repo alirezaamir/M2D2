@@ -59,8 +59,8 @@ def dataset_training(mode, test_patient, all_filenames, max_len=899, state_len=3
     return np.asarray(X_total), np.asarray(y_total) * balance_ratio
 
 
-def get_non_seizure_signal(test_patient, state_len):
-    sessions = test_dataset(test_patient)
+def get_non_seizure_signal(test_patient, state_len, root = '..'):
+    sessions = test_dataset(test_patient, root=root)
     sessions_permuted = np.random.permutation([s for s in sessions.keys()])
     for node in sessions_permuted:
         patient_num = int(node[3:5])

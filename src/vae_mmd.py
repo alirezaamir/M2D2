@@ -91,15 +91,16 @@ def plot_mmd(mmd, argmax_mmd, y_true, name, dir):
     start_points = np.where(y_diff > 0)[0]
     stop_points = np.where(y_diff < 0)[0]
 
+    x = np.linspace(0, y_true.shape[0]*4, y_true.shape[0])
     plt.figure()
-    plt.plot(mmd, label="MMD")
+    plt.plot(x, mmd, label="MMD")
     for seizure_start, seizure_stop in zip(start_points, stop_points):
-        plt.axvspan(seizure_start, seizure_stop, color='r', alpha=0.5)
+        plt.axvspan(x[seizure_start], x[seizure_stop], color='r', alpha=0.5)
     for point_idx, max_point in enumerate(argmax_mmd):
-        plt.plot(max_point, mmd[max_point], 'go', markersize=18)
-        plt.text(max_point-(len(mmd)*0.02), mmd[max_point]-(mmd[argmax_mmd[0]] * 0.025),
-                 str(point_idx+1), fontsize=18, fontweight='bold')
-    plt.xlabel("Chunk index")
+        plt.plot(x[max_point], mmd[max_point], 'go', markersize=18)
+        # plt.text(x[max_point-(len(mmd)*0.02), mmd[max_point]-(mmd[argmax_mmd[0]] * 0.025),
+        #          str(point_idx+1), fontsize=18, fontweight='bold')
+    plt.xlabel("Time (second)")
     plt.ylabel("MMD")
     plt.title("Seizure detection for patient {}".format(name))
     plt.savefig("{}/{}_norm.png".format(dir, name))
@@ -200,10 +201,10 @@ def main():
     plt.show()
 
 
-def build_dataset_pickle(test_patient):
+def build_dataset_pickle(test_patient, root='..'):
     dataset = {}
     for mode in ["train" , "valid"]:
-        dirname = "../temp/vae_mmd_data/{}/full_normal/{}".format(SEG_N, mode)
+        dirname = "{}/temp/vae_mmd_data/{}/full_normal/{}".format(root, SEG_N, mode)
         filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if x.startswith("chb{:02d}".format(test_patient))]
         for filename in filenames:
             with open(filename, "rb") as pickle_file:
