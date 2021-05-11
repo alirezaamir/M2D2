@@ -142,7 +142,7 @@ def get_mmd_model(state_len=None,
                   trainable_vae=True):
     input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 2))
     x = input_signal
-    num_conv_layers = 4
+    num_conv_layers = 3
     for i in range(num_conv_layers):
         x = layers.TimeDistributed(layers.Conv1D(8, 3, padding="same", activation="relu", trainable=trainable_vae),
                                    name="conv1d_{}_1".format(i+1))(x)
@@ -176,7 +176,7 @@ def get_conventional_model(state_len=None,
                   trainable_vae=True):
     input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 2))
     x = input_signal
-    num_conv_layers = 4
+    num_conv_layers = 3
     for i in range(num_conv_layers):
         x = layers.TimeDistributed(layers.Conv1D(8, 3, padding="same", activation="relu", trainable=trainable_vae),
                                    name="conv1d_{}_1".format(i + 1))(x)
@@ -185,10 +185,24 @@ def get_conventional_model(state_len=None,
         x = layers.TimeDistributed(layers.MaxPooling1D(2), name="pool_{}".format(i + 1))(x)
 
     x = layers.TimeDistributed(layers.Flatten(), name='flatten')(x)
-    dense1 = tf.keras.layers.Dense(150, activation='relu', name='dense1')(x)
-    final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense1)
+    mu = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="mu", trainable=trainable_vae,
+                                             kernel_initializer='zeros'),
+                                name='mu')(x)
+    sigma = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="sigma", trainable=trainable_vae,
+                                                kernel_initializer='zeros'),
+                                    name='sigma')(x)
+    z = layers.Lambda(
+        MMD_free_sampling, output_shape=(latent_dim,), name="latents")([mu, sigma, latent_dim])
+
+    dense1 = tf.keras.layers.Dense(4*latent_dim, activation='relu', name='dense1')(z)
+    dense2 = tf.keras.layers.Dense(2*latent_dim, activation='relu', name='dense2')(dense1)
+    final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense2)
 
     model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
+    logpz = log_normal_pdf(z, 0., 0.)
+    logqz_x = log_normal_pdf(z, mu, sigma)
+    divergence = K.mean(-logpz + logqz_x)
+    model.add_loss(divergence * 1e-4)
     return model
 
 
@@ -207,6 +221,14 @@ def new_sampling(args):
     z = z_mean + K.exp(0.5 * z_log_var) * epsilon
     z_expanded = K.expand_dims(z, axis=2)
     return z_expanded
+
+
+def MMD_free_sampling(args):
+    z_mean, z_log_var, dim = args
+    batch = K.shape(z_mean)[0]
+    epsilon = K.random_normal(shape=(batch, dim))
+    z = z_mean + K.exp(0.5 * z_log_var) * epsilon
+    return z
 
 
 def simple_sampling(args):
