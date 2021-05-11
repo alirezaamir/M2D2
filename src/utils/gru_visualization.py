@@ -21,7 +21,7 @@ def load_model(test_patient):
 
 
 def predict_(test_patient, model):
-    sessions = test_dataset(test_patient, root='../../')
+    sessions = get_epilepsiae_test(test_patient, root='../../')
     for node in sessions.keys():
         X = sessions[node]['data']
         y_true = sessions[node]['label']
@@ -33,7 +33,7 @@ def predict_(test_patient, model):
         y_true_section = y_true
 
         X_section = np.expand_dims(X_section, 0)
-        X_edge = get_non_seizure_signal(test_patient, state_len=STATE_LEN, root='../..')
+        X_edge = get_epilepsiae_non_seizure(test_patient, state_len=STATE_LEN, root='../..')
         X_section = np.concatenate((X_edge, X_section, X_edge), axis=1)
 
         mmd_predicted = model.predict(X_section)
@@ -47,6 +47,6 @@ def predict_(test_patient, model):
 
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    test_pat = 3
-    model = load_model(test_pat)
+    test_pat = 'pat_102'
+    model = load_model(1)
     predict_(test_pat, model)

@@ -84,8 +84,8 @@ def get_non_seizure_signal(test_patient, state_len, root = '..'):
     return np.random.randn(state_len)
 
 
-def get_epilepsiae_non_seizure(test_patient, state_len):
-    dirname = "../temp/vae_mmd_data/{}/{}/{}".format(SEG_N, "epilepsiae_non_seizure", test_patient)
+def get_epilepsiae_non_seizure(test_patient, state_len, root='..'):
+    dirname = "{}/temp/vae_mmd_data/{}/{}/{}".format(root, SEG_N, "epilepsiae_non_seizure", test_patient)
     all_filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname)]
     random_filenames = np.random.permutation(all_filenames)
     for filename in random_filenames:
@@ -173,10 +173,10 @@ def get_epilepsiae_seizures(mode, test_patient, dirname, max_len=899, state_len 
     return np.asarray(X_total), np.asarray(y_total)
 
 
-def get_epilepsiae_test(test_patient):
+def get_epilepsiae_test(test_patient, root='..'):
     dataset = {}
     for mode in ["train", "valid"]:
-        dirname = "../temp/vae_mmd_data/1024/epilepsiae_seizure/{}".format(mode)
+        dirname = "{}/temp/vae_mmd_data/1024/epilepsiae_seizure/{}".format(root, mode)
         filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if x.startswith(test_patient)]
         for filename in filenames:
             with open(filename, "rb") as pickle_file:
