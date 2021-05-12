@@ -10,8 +10,8 @@ import logging
 import matplotlib.pyplot as plt
 from utils.data import dataset_training, get_non_seizure_signal, get_epilepsiae_seizures, get_epilepsiae_test, \
     get_new_conv_w, get_epilepsiae_non_seizure
+from utils.data import build_dataset_pickle as test_dataset
 from training import get_all_filenames
-from vae_mmd import build_dataset_pickle as test_dataset
 from vae_mmd import plot_mmd
 from utils.params import pat_list
 import datetime
@@ -34,7 +34,7 @@ LATENT_DIM = 16
 
 def main():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/Anthony_v53".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/linear16_v55".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -44,24 +44,24 @@ def main():
     middle_diff = []
     all_filenames = get_all_filenames(entire_dataset=False)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in range(5,24):  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in range(1,24):  # ["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
         test_patient = str(test_id)
-        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
         # train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN,
         #                                                   state_len=STATE_LEN)
         # print("Label {}, Max {}".format(train_label.shape, np.max(train_label)))
-        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
         # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN,
         #                                               state_len=STATE_LEN)
 
-        vae_mmd_model = vae_model.get_conventional_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
+        vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
 
         print(vae_mmd_model.summary())
 
-        # conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
-        # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
+        conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
+        vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
         early_stopping = EarlyStopping(
             monitor="loss", patience=50, restore_best_weights=True)
@@ -176,7 +176,7 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
 
 def get_results():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/Anthony_v53".format(SEG_LENGTH, arch)
     diffs = []
     nc = {}
     for pat_id in range(1, 24):
@@ -195,7 +195,7 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'z_minus1_v52'
+    source_model = 'Anthony_v53'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
@@ -204,7 +204,7 @@ def across_dataset():
     save_path = '../temp/vae_mmd/integrated/{}/{}/{}/model/test_{}/saved_model/'.format(SEG_LENGTH,
                                                                                         source_arch,
                                                                                         source_model,
-                                                                                        1)
+                                                                                        -1)
     trained_model = tf.keras.models.load_model(save_path)
     for pat_id in range(30):
         # pat = pat_id

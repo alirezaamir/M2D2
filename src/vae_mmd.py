@@ -7,10 +7,8 @@ from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
 from sklearn.metrics.pairwise import polynomial_kernel
 import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
-import pickle
-from utils.params import SEG_N
+from utils.params import pat_list
+from utils.data import get_epilepsiae_test
 
 sys.path.append("../")
 LOG = logging.getLogger(os.path.basename(__file__))
@@ -23,7 +21,7 @@ LOG.setLevel(logging.INFO)
 SF = 256
 SEG_LENGTH = 1024
 EXCLUDED_SIZE = 15
-interval_len = 4
+interval_len = 8
 
 
 def get_interval_mmd(K_mat):
@@ -112,14 +110,15 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    arch = 'vae_unsupervised'
+    source_arch = 'vae_unsupervised'
+    test_arch = 'Epilepsiae_un'
     beta = 1e-05
     latent_dim = 16
     lr = 0.0001
     decay = 0.5
     gamma = 0.0
 
-    root = "../output/vae/{}/".format(arch)
+    root = "../output/vae/{}/".format(source_arch)
     stub = "seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}/saved_model/"
     build_model = vae_model.build_model
     build_model_args = {
@@ -139,17 +138,22 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    subdirname = "{}/{}/{}".format(dirname, SEG_LENGTH, arch)
+    subdirname = "{}/{}/{}".format(dirname, SEG_LENGTH, test_arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
     # sessions2 = create_seizure_dataset(SEG_LENGTH, SF)
     middle_diff = []
     z_dict = {}
-    for test_patient in range(1,25):
-        sessions = build_dataset_pickle(test_patient=test_patient)
+    # for test_patient in range(1,25):
+    for pat_id in range(30):
+        test_patient = pat_list[pat_id]
+        source_pat = 1
+        # sessions = build_dataset_pickle(test_patient=test_patient)
+        sessions = get_epilepsiae_test(test_patient=test_patient)
+
         # Load the specific weights for the model
-        dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma, test_patient)
+        dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma, source_pat)
         if not os.path.exists(dirname):
             print("Model does not exist in {}".format(dirname))
             exit()
@@ -158,9 +162,9 @@ def main():
 
         for node in sessions.keys():   # Loop2: nodes in the dataset
             # print("node: {}".format(node))
-            patient_num = int(node[3:5])
-            if test_patient != patient_num:
-                continue
+            # patient_num = int(node[3:5])
+            # if test_patient != patient_num:
+            #     continue
 
             LOG.info("session name: {}".format(test_patient))
             X = sessions[node]['data']
@@ -176,20 +180,32 @@ def main():
             z_dict[node] = latent
 
             K = kernel(latent)
-            mmd_maximum, mmd = get_changing_points(K, 4)
+            mmd_maximum, mmd = get_changing_points(K, 1)
             LOG.info("mmd maximum : {}".format(mmd_maximum))
+            print("MMD shape: {}\ny shape:{}".format(mmd.shape, y_true.shape))
+            y_true = y_true[interval_len: -interval_len]
             plot_mmd(mmd, mmd_maximum, y_true, node, subdirname)
 
             y_non_zero = np.where(y_true > 0, 1, 0)
+            y_non_zero = np.concatenate((y_non_zero, [0]))
+            # For sections which have seizure at the end or start of the section
+            y_non_zero = np.concatenate(([0], y_non_zero,))
+
             y_diff = np.diff(y_non_zero)
             start_points = np.where(y_diff > 0)[0]
             stop_points = np.where(y_diff < 0)[0]
-            middle_points = (start_points + stop_points) // 2
             LOG.info("points: {}, {}".format(start_points, stop_points))
+            accepted_points = []
+            for start, stop in zip(start_points, stop_points):
+                accepted_points += range(start, stop)
+            middle_points = (start_points + stop_points) // 2
+            LOG.info("start: {}, stop: {}\npoints: {}".format(start_points, stop_points, accepted_points))
 
-            t_diff = np.abs(middle_points - mmd_maximum[0])
+            t_diff = np.abs(accepted_points - mmd_maximum[0])
+
             LOG.info("Time diff : {}".format(t_diff))
-            middle_diff.append(np.min(t_diff))
+            if len(t_diff) >0 :
+                middle_diff.append(np.min(t_diff))
 
     # with open("../output/z_16.pickle", "wb") as pickle_file:
     #     pickle.dump(z_dict, pickle_file)
@@ -199,23 +215,6 @@ def main():
     plt.hist(middle_diff)
     plt.savefig("{}/hist_diff.png".format(subdirname))
     plt.show()
-
-
-def build_dataset_pickle(test_patient, root='..'):
-    dataset = {}
-    for mode in ["train" , "valid"]:
-        dirname = "{}/temp/vae_mmd_data/{}/full_normal/{}".format(root, SEG_N, mode)
-        filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if x.startswith("chb{:02d}".format(test_patient))]
-        for filename in filenames:
-            with open(filename, "rb") as pickle_file:
-                pickle_name = filename.split('/')[-1]
-                name = pickle_name[:8]
-                data = pickle.load(pickle_file)
-                x = np.array(data["X"])
-                y = np.array(data["y"])
-                dataset[name] = {'data': x, 'label': y}
-
-    return dataset
 
 
 class PrintLogs(tf.keras.callbacks.Callback):
@@ -230,5 +229,5 @@ class PrintLogs(tf.keras.callbacks.Callback):
 
 
 if __name__ == "__main__":
-    # tf.config.experimental.set_visible_devices([], 'GPU')
+    tf.config.experimental.set_visible_devices([], 'GPU')
     main()

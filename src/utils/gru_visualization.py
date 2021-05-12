@@ -1,9 +1,8 @@
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
-from vae_mmd import build_dataset_pickle as test_dataset
 from utils.data import dataset_training, get_non_seizure_signal, get_epilepsiae_seizures, get_epilepsiae_test, \
-    get_new_conv_w, get_epilepsiae_non_seizure
+    get_new_conv_w, get_epilepsiae_non_seizure, build_dataset_pickle as test_dataset
 from vae_mmd import plot_mmd
 
 

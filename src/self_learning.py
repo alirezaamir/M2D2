@@ -4,8 +4,7 @@ import pickle
 from utils.params import SEG_N, pat_hours
 import tensorflow as tf
 from sklearn.metrics import roc_auc_score
-from vae_mmd import build_dataset_pickle as test_dataset
-
+from utils.data import build_dataset_pickle as test_dataset
 
 TH = 0.5
 

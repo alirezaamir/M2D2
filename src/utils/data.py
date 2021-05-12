@@ -1,6 +1,5 @@
 import numpy as np
 import pickle
-from vae_mmd import build_dataset_pickle as test_dataset
 import pandas as pd
 import os
 from utils.params import SEG_N
@@ -60,7 +59,7 @@ def dataset_training(mode, test_patient, all_filenames, max_len=899, state_len=3
 
 
 def get_non_seizure_signal(test_patient, state_len, root = '..'):
-    sessions = test_dataset(test_patient, root=root)
+    sessions = build_dataset_pickle(test_patient, root=root)
     sessions_permuted = np.random.permutation([s for s in sessions.keys()])
     for node in sessions_permuted:
         patient_num = int(node[3:5])
@@ -203,3 +202,20 @@ def get_new_conv_w(state_len, N=6, state_dim=7):
             new_conv_weight[N + i - ch, 2 * state_dim - 1, ch] = -1.0 / (w_len * state_len)
 
     return [new_conv_weight]
+
+
+def build_dataset_pickle(test_patient, root='..'):
+    dataset = {}
+    for mode in ["train" , "valid"]:
+        dirname = "{}/temp/vae_mmd_data/{}/full_normal/{}".format(root, SEG_N, mode)
+        filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if x.startswith("chb{:02d}".format(test_patient))]
+        for filename in filenames:
+            with open(filename, "rb") as pickle_file:
+                pickle_name = filename.split('/')[-1]
+                name = pickle_name[:8]
+                data = pickle.load(pickle_file)
+                x = np.array(data["X"])
+                y = np.array(data["y"])
+                dataset[name] = {'data': x, 'label': y}
+
+    return dataset
