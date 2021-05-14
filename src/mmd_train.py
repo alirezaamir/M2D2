@@ -29,12 +29,12 @@ EXCLUDED_SIZE = 15
 interval_len = 4
 SEQ_LEN = 899
 STATE_LEN = 899
-LATENT_DIM = 16
+LATENT_DIM = 32
 
 
 def main():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/linear16_v55".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/baseline_epochs_v55".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -42,9 +42,9 @@ def main():
     # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
     middle_diff = []
-    all_filenames = get_all_filenames(entire_dataset=False)
+    all_filenames = get_all_filenames(entire_dataset=True)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in range(1,24):  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in [-1]:  # ["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
         test_patient = str(test_id)
         train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
@@ -55,13 +55,13 @@ def main():
         # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN,
         #                                               state_len=STATE_LEN)
 
-        vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
+        vae_mmd_model = vae_model.get_conventional_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
 
         print(vae_mmd_model.summary())
 
-        conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
-        vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
+        # conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
+        # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
         early_stopping = EarlyStopping(
             monitor="loss", patience=50, restore_best_weights=True)
@@ -71,7 +71,7 @@ def main():
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='binary_crossentropy')
 
         vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=50,
+                          validation_data=(val_data, val_label), batch_size=1, epochs=300,
                           callbacks=[early_stopping, history])
             # for layer in vae_mmd_model.layers:
             #     print("name : {}".format(layer.name))
@@ -195,7 +195,7 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'Anthony_v53'
+    source_model = 'z_minus1_v52'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
@@ -204,7 +204,7 @@ def across_dataset():
     save_path = '../temp/vae_mmd/integrated/{}/{}/{}/model/test_{}/saved_model/'.format(SEG_LENGTH,
                                                                                         source_arch,
                                                                                         source_model,
-                                                                                        -1)
+                                                                                        1)
     trained_model = tf.keras.models.load_model(save_path)
     for pat_id in range(30):
         # pat = pat_id
@@ -221,7 +221,7 @@ def across_dataset():
 
 
 if __name__ == "__main__":
-    tf.config.experimental.set_visible_devices([], 'GPU')
+    # tf.config.experimental.set_visible_devices([], 'GPU')
     main()
     # get_results()
     # across_dataset()
