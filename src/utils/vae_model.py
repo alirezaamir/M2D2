@@ -101,7 +101,7 @@ def get_mmd_model(state_len=None,
     final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense1)
 
     model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
-    model.add_loss(tf.reduce_mean(tf.abs(z)-1) * 1e-2)
+    model.add_loss(tf.abs(tf.reduce_mean(tf.abs(z)-1)) * 1e-2)
     return model
 
 

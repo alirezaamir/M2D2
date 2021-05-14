@@ -31,13 +31,13 @@ LATENT_DIM = 32
 
 def train_model():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/proposed_epochs_v55".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
     middle_diff = []
     all_filenames = get_all_filenames(entire_dataset=False)
-    for test_id in range(1,24):
+    for test_id in [3, 15]:
         test_patient = str(test_id)
         train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
         val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
@@ -55,22 +55,34 @@ def train_model():
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='binary_crossentropy')
+        BCE = tf.keras.losses.BinaryCrossentropy()
+        bce_train = []
+        bce_val = []
 
-        vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=50,
-                          callbacks=[history])
+        for iter in range(40):
+            savedir = '{}/model/test_{}/epoch_{}/saved_model/'.format(subdirname, test_patient, iter)
+            if not os.path.exists(savedir):
+                os.makedirs(savedir)
+            vae_mmd_model.save(savedir)
 
-        savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
-        if not os.path.exists(savedir):
-            os.makedirs(savedir)
-        vae_mmd_model.save(savedir)
+            vae_mmd_model.fit(x=train_data, y=train_label,
+                              validation_data=(val_data, val_label), batch_size=1, epochs=1,
+                              callbacks=[history])
 
-        diffs = inference(int(test_patient), trained_model=vae_mmd_model, subdirname=subdirname, dataset='CHB')
-        middle_diff += diffs
+            predict = vae_mmd_model.predict(x=train_data, batch_size=1)
+            LOG.info("BCE TRN epoch {} = {}".format(iter, BCE(y_pred=predict, y_true=train_label)))
+            bce_train.append( BCE(y_pred=predict, y_true=train_label))
+            predict = vae_mmd_model.predict(x=val_data, batch_size=1)
+            LOG.info("BCE VAL epoch {} = {}".format(iter, BCE(y_pred=predict, y_true=val_label)))
+            bce_val.append(BCE(y_pred=predict, y_true=val_label))
 
-    plt.figure()
-    plt.hist(middle_diff)
-    plt.savefig("{}/hist_diff.png".format(subdirname))
+        print("Train: {}\nVal:{}".format(bce_train, bce_val))
+        # diffs = inference(int(test_patient), trained_model=vae_mmd_model, subdirname=subdirname, dataset='CHB')
+        # middle_diff += diffs
+
+    # plt.figure()
+    # plt.hist(middle_diff)
+    # plt.savefig("{}/hist_diff.png".format(subdirname))
 
 
 def inference(test_patient:int, trained_model, subdirname:str, dataset='CHB'):
