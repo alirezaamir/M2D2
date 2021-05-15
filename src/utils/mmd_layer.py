@@ -13,13 +13,6 @@ class MMDLayer(tf.keras.layers.Layer):
         self.return_sequences = return_sequences
         self.return_state = return_state
         self.mask_th = mask_th
-        # self.init_state = tf.constant(np.zeros(shape=(state_len, latent_dim)), dtype=tf.float32)
-        # self.go_backward = backward
-        # w_init = tf.random_normal_initializer()
-        # self.w = tf.Variable(
-        #     initial_value=w_init(shape=(state_len, latent_dim), dtype="float32"),
-        #     trainable=False,
-        # )
 
         super(MMDLayer, self).__init__(**kwargs)
 
@@ -31,9 +24,7 @@ class MMDLayer(tf.keras.layers.Layer):
 
     def call(self, x, mask=None):
         d_t1 = tf.random.normal(shape=(self.state_len, self.latent_dim), dtype=tf.float32)
-        # d_t1 = self.w
         z_t = x
-        # d_t1 = x[1]
         _, kernel, d_t = tf.keras.backend.rnn(self.step, z_t, [d_t1], go_backwards=self.go_backwards)
 
         return kernel
@@ -43,7 +34,6 @@ class MMDLayer(tf.keras.layers.Layer):
         sigmoid = tf.sign(time_steps - th + 0.5)
         masked_inside = tf.multiply(input_array, 1 - sigmoid)
         inside_sum = tf.reduce_sum(masked_inside, axis=1, keepdims=True)
-        # average = tf.divide(inside_sum, th)
         return inside_sum
 
     def step(self, input, states):
@@ -54,7 +44,6 @@ class MMDLayer(tf.keras.layers.Layer):
         tile_dim = tf.constant([1, self.state_len, 1], dtype=tf.int32)
         z_tile = tf.tile(z_t, tile_dim)
         dot = tf.multiply(z_tile, d_t1)
-        # diff2 = tf.pow(diff, 2)
         sum = tf.reduce_sum(dot, axis=2)
         gamma = tf.multiply(1/self.latent_dim, sum)
         coeff = tf.add(1.0, gamma)
@@ -87,7 +76,6 @@ class MMDLayer(tf.keras.layers.Layer):
                            inside9, inside10, inside11, inside12, inside13, inside14, inside15, inside16,
                            inside17, inside18, inside19, inside20,
                            inside1000], axis=1)
-        # rbf = tf.exp(gamma)
 
         # Updating the state
         copy_z = tf.stop_gradient(z_t)

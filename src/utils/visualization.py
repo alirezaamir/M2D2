@@ -60,7 +60,7 @@ def get_model(test_patient):
 
     root = "../../output/vae/{}/".format(arch)
     stub = "seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}/saved_model/"
-    build_model = vae_model.build_model
+    build_model = vae_model.build_VAE_model
     build_model_args = {
         "input_shape": (SEG_LENGTH, 2,),
         "enc_dimension": latent_dim,

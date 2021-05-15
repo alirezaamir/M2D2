@@ -204,6 +204,21 @@ def get_new_conv_w(state_len, N=6, state_dim=7):
     return [new_conv_weight]
 
 
+def get_seizure_point_from_label(y_true):
+    y_non_zero = np.where(y_true > 0, 1, 0)
+    y_non_zero = np.concatenate((y_non_zero, [0]))
+    # For sections which have seizure at the end or start of the section
+    y_non_zero = np.concatenate(([0], y_non_zero,))
+    y_diff = np.diff(y_non_zero)
+    start_points = np.where(y_diff > 0)[0]
+    stop_points = np.where(y_diff < 0)[0]
+
+    accepted_points = []
+    for start, stop in zip(start_points, stop_points):
+        accepted_points += range(start, stop)
+    return y_true
+
+
 def build_dataset_pickle(test_patient, root='..'):
     dataset = {}
     for mode in ["train" , "valid"]:
