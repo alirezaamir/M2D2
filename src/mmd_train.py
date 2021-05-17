@@ -34,7 +34,7 @@ LATENT_DIM = 32
 
 def main():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v62".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -42,9 +42,9 @@ def main():
     # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
     middle_diff = []
-    all_filenames = get_all_filenames(entire_dataset=False)
+    all_filenames = get_all_filenames(entire_dataset=True)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in [15, 16]:  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in [-1]:  # ["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
         test_patient = str(test_id)
         train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
@@ -90,13 +90,13 @@ def main():
             os.makedirs(savedir)
         vae_mmd_model.save(savedir)
 
-        diffs, _ = inference(int(test_patient), trained_model=vae_mmd_model, subdirname=subdirname, dataset='CHB')
-        middle_diff += diffs
-
-    print(middle_diff)
-    plt.figure()
-    plt.hist(middle_diff)
-    plt.savefig("{}/hist_diff.png".format(subdirname))
+    #     diffs, _ = inference(int(test_patient), trained_model=vae_mmd_model, subdirname=subdirname, dataset='CHB')
+    #     middle_diff += diffs
+    #
+    # print(middle_diff)
+    # plt.figure()
+    # plt.hist(middle_diff)
+    # plt.savefig("{}/hist_diff.png".format(subdirname))
 
 
 def inference(test_patient, trained_model, subdirname, dataset='CHB'):
@@ -202,7 +202,7 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'z_minus1_v52'
+    source_model = 'z_minus1_v62'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
@@ -211,7 +211,7 @@ def across_dataset():
     save_path = '../temp/vae_mmd/integrated/{}/{}/{}/model/test_{}/saved_model/'.format(SEG_LENGTH,
                                                                                         source_arch,
                                                                                         source_model,
-                                                                                        1)
+                                                                                        -1)
     trained_model = tf.keras.models.load_model(save_path)
     for pat_id in range(30):
         # pat = pat_id
@@ -229,6 +229,6 @@ def across_dataset():
 
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    # main()
+    main()
     # get_results()
     across_dataset()
