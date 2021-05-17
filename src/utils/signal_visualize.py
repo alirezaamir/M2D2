@@ -87,16 +87,16 @@ def plot_box():
                      243, 254, 0, 0], 4)
 
     proposed_epilepsiae = np.dot(
-        [738, 314, 166, 573, 488, 9, 0, 3, 0, 139, 0, 0, 0, 0, 0, 42, 195, 0, 0, 27, 0, 97, 270, 45, 61, 90, 0, 6, 0, 0,
-         0, 0, 0, 296, 223, 85, 48, 211, 239, 396, 803, 200, 201, 89, 12, 0, 318, 126, 147, 403, 227, 177, 746, 211, 58,
-         215, 0, 0, 23, 46, 323, 823, 0, 377, 235, 0, 543, 0, 598, 518, 7, 301, 138, 500, 262, 27, 144, 14, 552, 198, 0,
-         0, 0, 293, 294, 90, 0, 0, 0, 0, 0, 0, 464, 0, 20, 579, 129, 64, 548, 89, 205, 10, 599, 495, 0, 0, 0, 133, 316,
-         0, 37, 337, 18, 417, 0, 418, 0, 641, 0, 596, 111, 0, 0, 0, 0, 784, 0, 0, 421, 435, 0, 0, 596, 326, 148, 278,
-         379, 61, 86, 0, 61, 22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 309, 0, 3, 0, 0, 0, 0, 370, 0, 0, 0, 336, 463, 0,
-         793, 368, 163, 0, 0, 741, 2, 0, 432, 0, 0, 7, 289, 0, 475, 0, 239, 69, 454, 1, 6, 525, 0, 17, 0, 0, 671, 0,
-         199, 427, 0, 0, 597, 31, 0, 0, 141, 11, 0, 326, 0, 0, 0, 0, 570, 20, 229, 0, 27, 175, 224, 423, 401, 20, 0,
-         121, 0, 0, 127, 0, 199, 0, 435, 17, 463, 0, 0, 6, 0, 0, 0, 0, 0, 0, 221, 61, 729, 0, 18, 421, 282, 472, 0, 423,
-         0, 0, 639, 0, 0, 168, 0, 389, 0, 0], 4)
+        [10, 314, 166, 0, 0, 2, 574, 2, 12, 138, 0, 0, 0, 0, 177, 9, 195, 289, 0, 3, 0, 0, 264, 10, 151, 0, 0, 0, 0, 0,
+         0, 0, 0, 302, 413, 71, 103, 52, 128, 392, 62, 203, 233, 254, 5, 108, 77, 52, 107, 401, 647, 84, 11, 209, 163,
+         208, 18, 102, 23, 42, 106, 4, 0, 7, 625, 0, 220, 0, 508, 0, 283, 115, 149, 124, 827, 22, 329, 438, 552, 206, 0,
+         0, 0, 233, 6, 9, 0, 0, 0, 0, 0, 0, 397, 161, 76, 17, 34, 61, 39, 24, 786, 2, 38, 250, 0, 82, 0, 0, 303, 0, 36,
+         334, 341, 445, 0, 292, 9, 158, 0, 509, 312, 0, 0, 0, 0, 12, 0, 0, 78, 4, 0, 0, 433, 202, 148, 330, 544, 328,
+         319, 0, 60, 18, 0, 0, 0, 0, 23, 148, 0, 0, 0, 0, 0, 0, 246, 282, 0, 0, 2, 0, 0, 0, 0, 0, 0, 556, 463, 0, 0,
+         508, 171, 0, 345, 0, 0, 0, 505, 0, 611, 8, 351, 156, 88, 100, 239, 141, 7, 189, 638, 0, 0, 125, 0, 0, 0, 0,
+         440, 235, 295, 0, 0, 31, 0, 0, 284, 0, 0, 465, 0, 0, 0, 0, 57, 277, 217, 0, 220, 243, 256, 423, 397, 0, 0, 120,
+         103, 526, 234, 0, 199, 489, 432, 17, 0, 0, 136, 5, 0, 0, 0, 135, 0, 0, 201, 850, 726, 0, 0, 0, 513, 0, 0, 89,
+         0, 0, 0, 0, 0, 0, 0, 601, 0, 0], 4)
     baseline_epilepsiae = np.dot(
         [11, 313, 0, 515, 450, 9, 9, 13, 235, 8, 176, 145, 37, 138, 170, 222, 196, 111, 55, 265, 0, 19, 264, 717, 206,
          0, 52, 730, 71, 771, 658, 0, 525, 209, 20, 85, 249, 132, 258, 117, 3, 198, 132, 9, 10, 78, 123, 32, 266, 402,
@@ -124,20 +124,21 @@ def plot_box():
          541, 477, 269, 233, 5, 40, 548, 23, 107, 178, 225, 419, 785, 0], 4)
 
     plt.figure(figsize=(8, 6))
-    plt.boxplot([proposed, baseline, manual], notch=False, whis=[5, 95], labels=['Proposed', 'CNN', 'Manual MMD'])
-    # plt.boxplot([proposed_epilepsiae, baseline_epilepsiae, manual_epilepsiae], whis=[5, 95], labels=['Proposed', 'CNN', 'Manual MMD'])
+    # plt.boxplot([proposed, baseline, manual], notch=False, whis=[5, 95])
+    plt.boxplot([proposed_epilepsiae, baseline_epilepsiae, manual_epilepsiae], whis=[5, 95])
+    plt.xticks(ticks=[1,2,3], labels=['Proposed', 'CNN', 'Manual MMD'], fontsize=14)
     plt.ylim([-20, 3600])
     plt.yticks(ticks=np.arange(0, 3601, step=600), labels=[" {}".format(str(i)) for i in np.arange(0, 61, step=10)],
-               fontsize=10)
-    plt.ylabel('Time (min)', fontsize=14)
+               fontsize=12)
+    plt.ylabel('Time (min)', fontsize=16)
     # plt.show()
-    plt.savefig('../../output/images/LOOCV')
+    plt.savefig('../../output/images/unseen')
 
 
 if __name__ == '__main__':
     tf.config.experimental.set_visible_devices([], 'GPU')
-    test_pat = 3
-    model_proposed = load_model(test_patient=test_pat, model_name='z_minus1_v52')
-    model_baseline = load_model(test_patient=test_pat, model_name='Anthony_v53')
-    predict_(test_patient=test_pat, model_proposed=model_proposed, model_baseline = model_baseline)
-    # plot_box()
+    # test_pat = 3
+    # model_proposed = load_model(test_patient=test_pat, model_name='z_minus1_v52')
+    # model_baseline = load_model(test_patient=test_pat, model_name='Anthony_v53')
+    # predict_(test_patient=test_pat, model_proposed=model_proposed, model_baseline = model_baseline)
+    plot_box()
