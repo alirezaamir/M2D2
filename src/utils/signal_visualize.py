@@ -17,7 +17,7 @@ def predict_(test_patient, model_proposed, model_baseline):
     sessions = test_dataset(test_patient, root='../../')
     node = 'chb03_03'
     STATE_LEN = 899
-    minutes = 40
+    minutes = 60
 
     X = sessions[node]['data']
     y_true = sessions[node]['label']
@@ -27,7 +27,9 @@ def predict_(test_patient, model_proposed, model_baseline):
     X_section = np.concatenate((X_edge, X_section, X_edge), axis=1)
 
     out = model_proposed.predict(X_section)[0, STATE_LEN:STATE_LEN + minutes * 15, :]
+    print(np.where(out > 0.5))
     out_baseline = model_baseline.predict(X_section)[0, STATE_LEN:STATE_LEN + minutes * 15, :]
+    print(np.where(out_baseline > 0.5))
     t_out = np.linspace(0, minutes, minutes * 15)
 
     X_20min = np.reshape(X, newshape=(-1, 2))[:256 * minutes * 60]
@@ -38,7 +40,7 @@ def predict_(test_patient, model_proposed, model_baseline):
     start_points = np.where(y_diff > 0)[0]
     stop_points = np.where(y_diff < 0)[0]
 
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(15, 6))
     plt.plot(t, 0.35 * (X_20min[:, 0]) + 10, linewidth=0.3, c='dimgray')
     plt.plot(t, 0.35 * (X_20min[:, 1]) + 20, linewidth=0.3, c='dimgray')
     for seizure_start, seizure_stop in zip(start_points, stop_points):
@@ -134,8 +136,8 @@ def plot_box():
 
 if __name__ == '__main__':
     tf.config.experimental.set_visible_devices([], 'GPU')
-    # test_pat = 3
-    # model_proposed = load_model(test_patient=test_pat, model_name='z_minus1_v52')
-    # model_baseline = load_model(test_patient=test_pat, model_name='Anthony_v53')
-    # predict_(test_patient=test_pat, model_proposed=model_proposed, model_baseline = model_baseline)
-    plot_box()
+    test_pat = 3
+    model_proposed = load_model(test_patient=test_pat, model_name='z_minus1_v52')
+    model_baseline = load_model(test_patient=test_pat, model_name='Anthony_v53')
+    predict_(test_patient=test_pat, model_proposed=model_proposed, model_baseline = model_baseline)
+    # plot_box()
