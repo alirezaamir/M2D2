@@ -124,15 +124,15 @@ def plot_box():
          541, 477, 269, 233, 5, 40, 548, 23, 107, 178, 225, 419, 785, 0], 4)
 
     plt.figure(figsize=(8, 6))
-    # plt.boxplot([proposed, baseline, manual], notch=False, whis=[5, 95])
-    plt.boxplot([proposed_epilepsiae, baseline_epilepsiae, manual_epilepsiae], whis=[5, 95])
-    plt.xticks(ticks=[1,2,3], labels=['Proposed', 'CNN', 'Manual MMD'], fontsize=14)
+    plt.boxplot([proposed, baseline, manual], notch=False, whis=[5, 95])
+    # plt.boxplot([proposed_epilepsiae, baseline_epilepsiae, manual_epilepsiae], whis=[5, 95])
+    plt.xticks(ticks=[1,2,3], labels=['Proposed', 'C-CNN', 'Manual MMD'], fontsize=16)
     plt.ylim([-20, 3600])
     plt.yticks(ticks=np.arange(0, 3601, step=600), labels=[" {}".format(str(i)) for i in np.arange(0, 61, step=10)],
-               fontsize=12)
+               fontsize=14)
     plt.ylabel('Time (min)', fontsize=16)
     # plt.show()
-    plt.savefig('../../output/images/unseen')
+    plt.savefig('../../output/images/LOOCV')
 
 
 if __name__ == '__main__':

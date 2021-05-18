@@ -162,7 +162,8 @@ def new_sampling(args):
 def MMD_free_sampling(args):
     z_mean, z_log_var, dim = args
     batch = K.shape(z_mean)[0]
-    epsilon = K.random_normal(shape=(batch, dim))
+    seq = K.shape(z_mean)[1]
+    epsilon = K.random_normal(shape=(batch,seq, dim))
     z = z_mean + K.exp(0.5 * z_log_var) * epsilon
     return z
 

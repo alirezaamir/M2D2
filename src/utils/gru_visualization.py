@@ -62,19 +62,21 @@ def get_within_between(z, y_true):
 
 def load_model(test_patient):
     arch = 'vae_free'
-    subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(1024, arch)
+    subdirname = "../../temp/vae_mmd/integrated/{}/{}/Anthony_v53".format(1024, arch)
+    # subdirname = "../../output/vae/vae_supervised/seg_n_1024/beta_1e-05/latent_dim_16/lr_0.0001/decay_0.5/gamma_0.0"
     save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
+    # save_path = '{}/test_{}/'.format(subdirname, test_patient)
     trained_model = tf.keras.models.load_model(save_path)
     print(trained_model.summary())
     intermediate_model = tf.keras.models.Model(inputs=trained_model.input,
                                                outputs=[
                                                    trained_model.output,
-                                                   trained_model.get_layer('MMD').input])
+                                                   trained_model.get_layer('dense1').input])
     return intermediate_model
 
 
 def predict_(test_patient, model):
-    sessions = get_epilepsiae_test(test_patient, root='../../')
+    sessions = test_dataset(test_patient, root='../../')
     out_list = np.zeros(0)
     true_list = np.zeros(0)
     J_dict = {}
@@ -90,18 +92,17 @@ def predict_(test_patient, model):
         y_true_section = y_true
 
         X_section = np.expand_dims(X_section, 0)
-        X_edge = get_epilepsiae_non_seizure(test_patient, state_len=STATE_LEN, root='../..')
+        X_edge = get_non_seizure_signal(test_patient, state_len=STATE_LEN, root='../..')
         X_section = np.concatenate((X_edge, X_section, X_edge), axis=1)
 
         out, z = model.predict(X_section)
-        # z = z[0, STATE_LEN:-STATE_LEN, :]
-        # Sb, Sw, J = get_within_between(z, y_true)
+        z = z[0, STATE_LEN:-STATE_LEN, :]
+        Sb, Sw, J = get_within_between(z, y_true)
         # print("Sw: {}, Sb: {}, J: {}".format(Sw, Sb, J))
-        J_dict[node] = length
+        J_dict[node] = J
         # mmd_argmax = np.argmax(out[0, STATE_LEN:-STATE_LEN, :])
         out = out[0, STATE_LEN:-STATE_LEN, 0]
-        plt.plot(out, 'r')
-        min_max = (out - np.min(out)) * (1/(np.max(out) - np.min(out)))
+        # plt.plot(out, 'r')
         out_list = np.concatenate((out_list, out))
         true_list = np.concatenate((true_list, y_true))
         # get_PCA(z[0, STATE_LEN:-STATE_LEN, 0, :], y_true_section, mmd_argmax, node)
@@ -111,6 +112,7 @@ def predict_(test_patient, model):
         #     mmd_maximum = [np.argmax(mmd_edge_free)]
         #     name = "{}_{}".format(node, idx)
         #     plot_mmd(mmd_edge_free, mmd_maximum, y_true_section, name, subdirname)
+    # auc_pat = get_accuracy(out_list, true_list)
     return out_list, true_list, J_dict
 
 
@@ -230,16 +232,17 @@ if __name__ == "__main__":
     true_all = np.zeros(0)
     length = []
     J_list = {}
-    for test_pat in pat_list:
-        model = load_model('1')
+    for test_pat in range(1,24):
+        model = load_model(test_pat)
         out, true, J = predict_(test_pat, model)
         out_all = np.concatenate((out_all, out))
         true_all = np.concatenate((true_all, true))
         J_list.update(J)
         # print(auc_list)
         # print(length)
-    auc = get_accuracy(out_all, true_all)
-    print("Total Accuracy: {}".format(auc))
+        # auc_list.append(auc_pat)
+    auc_total = get_accuracy(out_all, true_all)
+    print("Total AUC: {}".format(auc_total))
 
     print("J : {}".format(J_list))
     # plot_AUCs()
