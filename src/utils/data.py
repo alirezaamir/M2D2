@@ -216,7 +216,7 @@ def get_seizure_point_from_label(y_true):
     accepted_points = []
     for start, stop in zip(start_points, stop_points):
         accepted_points += range(start, stop)
-    return y_true
+    return accepted_points
 
 
 def build_dataset_pickle(test_patient, root='..'):
