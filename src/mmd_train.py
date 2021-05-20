@@ -15,6 +15,7 @@ from vae_mmd import build_dataset_pickle as test_dataset
 from vae_mmd import plot_mmd
 from utils.params import pat_list
 import datetime
+import json
 
 LOG = logging.getLogger(os.path.basename(__file__))
 ch = logging.StreamHandler()
@@ -34,7 +35,7 @@ LATENT_DIM = 32
 
 def main():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v62".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/concatenated_v63".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -67,7 +68,7 @@ def main():
 
         print(vae_mmd_model.summary())
 
-        conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
+        conv_weight = get_new_conv_w(state_len=STATE_LEN, N=12, state_dim=26)
         vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
         early_stopping = EarlyStopping(
@@ -78,7 +79,7 @@ def main():
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='binary_crossentropy')
 
         vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=40,
+                          validation_data=(val_data, val_label), batch_size=1, epochs=30,
                           callbacks=[early_stopping, history])
             # for layer in vae_mmd_model.layers:
             #     print("name : {}".format(layer.name))
@@ -106,7 +107,7 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
     else:
         sessions = get_epilepsiae_test(test_patient)
         non_seizure_dataset = get_epilepsiae_non_seizure
-    middle_diff = []
+    middle_diff = {}
     not_detected = {}
 
     if trained_model is None:
@@ -177,7 +178,7 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
             if 0 < np.max(mmd_predicted) < 0.001:
                 not_detected[node] = (np.max(mmd_predicted), np.min(t_diff))
             else:
-                middle_diff.append(np.min(t_diff))
+                middle_diff[node] = int(np.min(t_diff))
     return middle_diff, not_detected
 
 
@@ -202,11 +203,11 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'z_minus1_v62'
+    source_model = 'concatenated_v63'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
-    diffs = []
+    diffs = {}
     nc = {}
     save_path = '../temp/vae_mmd/integrated/{}/{}/{}/model/test_{}/saved_model/'.format(SEG_LENGTH,
                                                                                         source_arch,
@@ -217,14 +218,16 @@ def across_dataset():
         # pat = pat_id
         pat = pat_list[pat_id]
         diff_pat, not_detected_pat = inference(pat, trained_model, subdirname, dataset='Epilepsiae')
-        diffs += diff_pat
+        diffs.update(diff_pat)
         nc.update(not_detected_pat)
-    print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
+    json.dump(diffs, open("../output/json/result_{}.json".format(datetime.datetime.now()), "w"))
+    print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(list(diffs.values())), np.mean(list(diffs.values()))))
     print("Not detected patients: {}".format(nc))
-    diffs_minute = [x / 15.0 for x in diffs]
-    plt.figure()
-    plt.hist(diffs_minute, bins=150, range=(0, 200))
-    plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
+
+    # diffs_minute = [x / 15.0 for x in diffs]
+    # plt.figure()
+    # plt.hist(diffs_minute, bins=150, range=(0, 200))
+    # plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
 
 
 if __name__ == "__main__":

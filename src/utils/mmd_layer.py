@@ -77,10 +77,19 @@ class MMDLayer(tf.keras.layers.Layer):
         inside14 = self.get_masked_sum(poly, 14)
         inside15 = self.get_masked_sum(poly, 15)
         inside16 = self.get_masked_sum(poly, 16)
+        inside17 = self.get_masked_sum(poly, 17)
+        inside18 = self.get_masked_sum(poly, 18)
+        inside19 = self.get_masked_sum(poly, 19)
+        inside20 = self.get_masked_sum(poly, 20)
+        inside21 = self.get_masked_sum(poly, 21)
+        inside22 = self.get_masked_sum(poly, 22)
+        inside23 = self.get_masked_sum(poly, 23)
+        inside24 = self.get_masked_sum(poly, 24)
         inside1000 = self.get_masked_sum(poly, self.state_len)
 
         inout = tf.concat([inside0, inside1, inside2, inside3, inside4, inside5, inside6, inside7, inside8,
                            inside9, inside10, inside11, inside12, inside13, inside14, inside15, inside16,
+                           inside17, inside18, inside19, inside20, inside21, inside22, inside23, inside24,
                            inside1000], axis=1)
         # rbf = tf.exp(gamma)
 

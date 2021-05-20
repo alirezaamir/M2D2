@@ -157,11 +157,17 @@ def get_mmd_model(state_len=None,
                                    name='sigma')(x)
     z = layers.Lambda(
         new_sampling, output_shape=(latent_dim,), name="latents")([mu, sigma, latent_dim])
-    mmd = tf.keras.layers.Bidirectional(MMDLayer(state_len, latent_dim, mask_th=6, go_backwards=False), name='MMD')(z)
-    interval = tf.keras.layers.Conv1D(filters=9, kernel_size=17, padding='same', use_bias=False, name='conv_interval',
+    z_expanded = layers.Lambda(
+        expand_dim, output_shape=(latent_dim,), name="latents")(z)
+    mmd = tf.keras.layers.Bidirectional(MMDLayer(state_len, latent_dim, mask_th=6, go_backwards=False), name='MMD')(z_expanded)
+    interval = tf.keras.layers.Conv1D(filters=13, kernel_size=25, padding='same', use_bias=False, name='conv_interval',
                                       trainable=False)(mmd)
     gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=25, return_sequences=True), name='GRU')(interval)
-    dense1 = tf.keras.layers.Dense(100, activation='relu', name='dense1')(gru)
+    # mmd_weight = tf.keras.layers.Dense(11, activation='sigmoid', name='mmd_weight')(gru)
+    # multiply = tf.keras.layers.Multiply()([mmd_weight, interval])
+    # average = tf.keras.layers.GlobalAveragePooling1D('channels_first')(multiply)
+    # sigmoid = tf.keras.layers.Activation('sigmoid')(average)
+    dense1 = tf.keras.layers.Dense(latent_dim, activation='relu', name='dense')(gru)
     final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense1)
 
     model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
@@ -205,8 +211,8 @@ def new_sampling(args):
     batch = K.shape(z_mean)[0]
     epsilon = K.random_normal(shape=(batch, dim))
     z = z_mean + K.exp(0.5 * z_log_var) * epsilon
-    z_expanded = K.expand_dims(z, axis=2)
-    return z_expanded
+    # z_expanded = K.expand_dims(z, axis=2)
+    return z
 
 
 def simple_sampling(args):
