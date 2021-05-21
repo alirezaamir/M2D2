@@ -10,6 +10,7 @@ from vae_mmd import plot_mmd
 from scipy.ndimage import gaussian_filter1d
 from sklearn.metrics import roc_curve, auc, accuracy_score, f1_score
 from utils.params import pat_list
+import json
 
 STATE_LEN = 899
 
@@ -39,6 +40,17 @@ def get_accuracy(y_predict, y_true):
     return auc(fpr, tpr)
     # y_pred = y_predict > 0.5
     # return accuracy_score(y_true, y_pred)
+
+
+def plot_roc():
+    plt.figure()
+    for method in ['baseline_unseen', 'proposed_unseen']:
+        data = json.load(open('{}.json'.format(method), 'r'))
+        y_true = data['true']
+        y_predict = data['predict']
+        fpr, tpr, thresholds = roc_curve(y_true, y_predict)
+        plt.plot(fpr, tpr, marker='.')
+    plt.savefig()
 
 
 def get_within_between(z, y_true):
@@ -76,7 +88,7 @@ def load_model(test_patient):
 
 
 def predict_(test_patient, model):
-    sessions = test_dataset(test_patient, root='../../')
+    sessions = get_epilepsiae_test(test_patient, root='../../')
     out_list = np.zeros(0)
     true_list = np.zeros(0)
     J_dict = {}
@@ -92,7 +104,7 @@ def predict_(test_patient, model):
         y_true_section = y_true
 
         X_section = np.expand_dims(X_section, 0)
-        X_edge = get_non_seizure_signal(test_patient, state_len=STATE_LEN, root='../..')
+        X_edge = get_epilepsiae_non_seizure(test_patient, state_len=STATE_LEN, root='../..')
         X_section = np.concatenate((X_edge, X_section, X_edge), axis=1)
 
         out, z = model.predict(X_section)
@@ -213,18 +225,20 @@ def plot_loss():
            0.050786473, 0.05676218, 0.06318102, 0.06781284, 0.056076918, 0.069646314, 0.06519431, 0.0696569,
            0.058675777, 0.07144404, 0.0555296]
 
-    k_ascending = 5
+    k_ascending = 10
     proposed_i = len(val_prop)
     base_i = len(val_base)
     for i in range(len(val_prop) - k_ascending):
-        if val_prop[i:i+k_ascending] == sorted(val_prop[i:i+k_ascending]):
+        filtered = gaussian_filter1d(val_prop[:i+k_ascending], sigma=5)
+        if list(filtered[i:i+k_ascending]) == list(sorted(filtered[i:i+k_ascending])):
             print("i: {}".format(i))
-            proposed_i = i
+            proposed_i = i+k_ascending
             break
     for i in range(len(val_base)- k_ascending):
-        if val_base[i:i+k_ascending] == sorted(val_base[i:i+k_ascending]):
+        filtered = gaussian_filter1d(val_base[:i + k_ascending], sigma=5)
+        if list(filtered[i:i + k_ascending]) == list(sorted(filtered[i:i + k_ascending])):
             print("i: {}".format(i))
-            base_i = i
+            base_i = i+k_ascending
             break
 
     plt.figure(figsize=(12, 6))
@@ -262,8 +276,8 @@ if __name__ == "__main__":
     # true_all = np.zeros(0)
     # length = []
     # J_list = {}
-    # for test_pat in range(1,24):
-    #     model = load_model(test_pat)
+    # model = load_model(-1)
+    # for test_pat in pat_list:
     #     out, true, J = predict_(test_pat, model)
     #     out_all = np.concatenate((out_all, out))
     #     true_all = np.concatenate((true_all, true))
@@ -272,8 +286,11 @@ if __name__ == "__main__":
     #     # print(length)
     #     # auc_list.append(auc_pat)
     # auc_total = get_accuracy(out_all, true_all)
+    # dict_out = {'predict': out_all.tolist(), 'true': true_all.tolist()}
+    # json.dump(dict_out, open('baseline_unseen.json', 'w'))
+    plot_roc()
     # print("Total AUC: {}".format(auc_total))
     #
     # print("J : {}".format(J_list))
     # plot_AUCs()
-    plot_loss()
+    # plot_loss()

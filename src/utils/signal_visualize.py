@@ -123,16 +123,61 @@ def plot_box():
          765, 676, 266, 219, 173, 380, 20, 15, 0, 238, 148, 154, 9, 250, 0, 43, 188, 0, 335, 84, 771, 208, 402, 422,
          541, 477, 269, 233, 5, 40, 548, 23, 107, 178, 225, 419, 785, 0], 4)
 
-    plt.figure(figsize=(8, 6))
-    plt.boxplot([proposed, baseline, manual], notch=False, whis=[5, 95])
+    # fig, ax = plt.subplots(figsize=(8, 6))
+    # colors = ['pink', 'lightblue', 'lightgreen']
+    # bplot = ax.boxplot([proposed, baseline, manual], notch=False, whis=[5, 95], labels=['Proposed', 'C-CNN', 'Manual MMD'])
+    # for patch, color in zip(bplot['boxes'], colors):
+    #     patch.set_facecolor(color)
+
     # plt.boxplot([proposed_epilepsiae, baseline_epilepsiae, manual_epilepsiae], whis=[5, 95])
-    plt.xticks(ticks=[1,2,3], labels=['Proposed', 'C-CNN', 'Manual MMD'], fontsize=16)
-    plt.ylim([-20, 3600])
-    plt.yticks(ticks=np.arange(0, 3601, step=600), labels=[" {}".format(str(i)) for i in np.arange(0, 61, step=10)],
+    # ax.set_xticks(ticks=[1,2,3], fontsize=16)
+    # plt.ylim([-20, 3600])
+    # plt.yticks(ticks=np.arange(0, 3601, step=600), labels=[" {}".format(str(i)) for i in np.arange(0, 61, step=10)],
+    #            fontsize=14)
+    # plt.ylabel('Time (min)', fontsize=16)
+
+    boxprops = dict( linewidth=3, color='black')
+    capprops = dict( linewidth=3)
+    flierprops = dict(marker='x', markerfacecolor='red', markersize=8,
+                      markeredgecolor='red')
+    medianprops = dict(linewidth=3.5, color='firebrick')
+
+    all_data = [proposed_epilepsiae, baseline_epilepsiae, manual_epilepsiae]
+    labels = ['Proposed', 'C-CNN', 'Manual MMD']
+
+    fig, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(8, 6))
+
+    # rectangular box plot
+    bplot1 = ax1.boxplot(all_data,
+                         whis=[5, 95],
+                         patch_artist=True,  # fill with color
+                         boxprops=boxprops, medianprops = medianprops , capprops = capprops, flierprops= flierprops,
+                         whiskerprops = capprops)  # will be used to label x-ticks
+    # ax1.set_title('Rectangular box plot')
+    ax1.set_ylim([-20, 3600])
+    ax1.set_ylabel('Time (min)', fontsize=16)
+    ax1.set_yticks(ticks=np.arange(0, 3601, step=600))
+    ax1.set_yticklabels(labels=[" {}".format(str(i)) for i in np.arange(0, 61, step=10)],
                fontsize=14)
-    plt.ylabel('Time (min)', fontsize=16)
+    ax1.set_xticklabels( labels=labels, fontsize=14)
+    plt.grid(axis='y')
+
+
+    # notch shape box plot
+    # bplot2 = ax1.boxplot(all_data,
+    #                      notch=True,  # notch shape
+    #                      vert=True,  # vertical box alignment
+    #                      patch_artist=True,  # fill with color
+    #                      labels=labels)  # will be used to label x-ticks
+    # ax1.set_title('Notched box plot')
+
+    # fill with colors
+    colors = ['pink', 'lightblue', 'lightgreen']
+    for bplot in (bplot1, bplot1):
+        for patch, color in zip(bplot['boxes'], colors):
+            patch.set_facecolor(color)
     # plt.show()
-    plt.savefig('../../output/images/LOOCV')
+    plt.savefig('../../output/images/unseen')
 
 
 if __name__ == '__main__':
