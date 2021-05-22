@@ -10,6 +10,7 @@ import logging
 import matplotlib.pyplot as plt
 from utils.data import dataset_training, get_non_seizure_signal, get_epilepsiae_seizures, get_epilepsiae_test, \
     get_new_conv_w, get_epilepsiae_non_seizure
+import utils.data as dt
 from training import get_all_filenames
 from vae_mmd import build_dataset_pickle as test_dataset
 from vae_mmd import plot_mmd
@@ -28,14 +29,14 @@ SF = 256
 SEG_LENGTH = 1024
 EXCLUDED_SIZE = 15
 interval_len = 4
-SEQ_LEN = 899
+SEQ_LEN = 900
 STATE_LEN = 899
 LATENT_DIM = 32
 
 
 def main():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/concatenated_v63".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/max_pool_v64".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -48,11 +49,15 @@ def main():
     for test_id in [-1]:  # ["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
         test_patient = str(test_id)
-        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
+        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+        train_shrink_label = dt.get_y_label(train_label, 15)
+        print("New shape: {}".format(train_shrink_label.shape))
         # train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN,
         #                                                   state_len=STATE_LEN)
         # print("Label {}, Max {}".format(train_label.shape, np.max(train_label)))
-        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
+        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+        val_shrink_label = dt.get_y_label(val_label, 15)
+        print("New shape: {}".format(val_shrink_label.shape))
         # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN,
         #                                               state_len=STATE_LEN)
 
@@ -67,19 +72,40 @@ def main():
                                                 seq_len=None, trainable_vae=True)
 
         print(vae_mmd_model.summary())
+        subdirname = "../temp/vae_mmd/integrated/1024/vae_free/z_minus1_v52"
+        save_path = '{}/model/test_{}/saved_model/'.format(subdirname, 10)
+        trained_model = tf.keras.models.load_model(save_path)
+        # predict = trained_model.predict(x=x, batch_size=1)
+        for layer in trained_model.layers:
+            if layer.name == 'conv_interval':
+                break
+            print("Layer name :{}".format(layer.name))
+            w = trained_model.get_layer(layer.name).get_weights()
+            if len(w) == 0:
+                continue
+            vae_mmd_model.get_layer(layer.name).set_weights(w)
 
-        conv_weight = get_new_conv_w(state_len=STATE_LEN, N=12, state_dim=26)
+        # for layer in new_model.layers:
+        #     print("Layer name :{}".format(layer.name))
+
+        dense_weight = np.zeros((13, 1))
+        dense_weight[-1, 0] = 1
+        conv_weight = get_new_conv_w(state_len=899, N=12, state_dim=26)
         vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
+        vae_mmd_model.get_layer('dense').set_weights([dense_weight, np.zeros(1)])
+
+        # conv_weight = get_new_conv_w(state_len=STATE_LEN, N=12, state_dim=26)
+        # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
         early_stopping = EarlyStopping(
             monitor="loss", patience=50, restore_best_weights=True)
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
         print("input shape: {}".format(train_data.shape))
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='binary_crossentropy')
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(), loss='categorical_crossentropy', metrics='accuracy')
 
-        vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=30,
+        vae_mmd_model.fit(x=train_data, y=tf.keras.utils.to_categorical(train_shrink_label, 60),
+                          validation_data=(val_data, tf.keras.utils.to_categorical(val_shrink_label, 60)), batch_size=1, epochs=60,
                           callbacks=[early_stopping, history])
             # for layer in vae_mmd_model.layers:
             #     print("name : {}".format(layer.name))
@@ -234,4 +260,4 @@ if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
     main()
     # get_results()
-    across_dataset()
+    # across_dataset()

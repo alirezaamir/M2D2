@@ -190,6 +190,13 @@ def get_epilepsiae_test(test_patient):
     return dataset
 
 
+def get_y_label(y_true, chunk_length):
+    batch = y_true.shape[0]
+    reshaped = np.reshape(y_true, newshape=(batch ,60, 15))
+    sum_y = np.sum(reshaped, axis=2)
+    return np.argmax(sum_y, axis=1)
+
+
 def get_new_conv_w(state_len, N=6, state_dim=7):
     new_conv_weight = np.zeros((N * 2 + 1, 2 * state_dim, N+1), dtype=np.float)
 
