@@ -56,7 +56,7 @@ def dataset_training(mode, test_patient, all_filenames, max_len=899, state_len=3
     # balance_ratio = max_len / np.mean(seizure_len)
     balance_ratio = 1
     print("Balanced Ratio : {}".format(balance_ratio))
-    return np.asarray(X_total), np.asarray(y_total) * balance_ratio
+    return np.asarray(X_total), np.asarray(y_total, dtype=np.float32) * balance_ratio
 
 
 def get_non_seizure_signal(test_patient, state_len, root = '..'):
@@ -192,9 +192,9 @@ def get_epilepsiae_test(test_patient):
 
 def get_y_label(y_true, chunk_length):
     batch = y_true.shape[0]
-    reshaped = np.reshape(y_true, newshape=(batch ,60, 15))
+    reshaped = np.reshape(y_true, newshape=(batch ,900//chunk_length, chunk_length))
     sum_y = np.sum(reshaped, axis=2)
-    return np.argmax(sum_y, axis=1)
+    return np.where(sum_y > 0, 1, 0)
 
 
 def get_new_conv_w(state_len, N=6, state_dim=7):

@@ -162,18 +162,13 @@ def get_mmd_model(state_len=None,
     mmd = tf.keras.layers.Bidirectional(MMDLayer(state_len, latent_dim, mask_th=6, go_backwards=False), name='MMD')(z_expanded)
     interval = tf.keras.layers.Conv1D(filters=13, kernel_size=25, padding='same', use_bias=False, name='conv_interval',
                                       trainable=False)(mmd)
-    # gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=25, return_sequences=True), name='GRU')(interval)
-    # mmd_weight = tf.keras.layers.Dense(11, activation='sigmoid', name='mmd_weight')(gru)
-    # multiply = tf.keras.layers.Multiply()([mmd_weight, interval])
-    # average = tf.keras.layers.GlobalAveragePooling1D('channels_first')(multiply)
-    # sigmoid = tf.keras.layers.Activation('sigmoid')(average)
-    dense1 = layers.TimeDistributed(tf.keras.layers.Dense(1, activation='tanh'), name='dense')(interval)
-    max_pool = tf.keras.layers.MaxPooling1D(pool_size=15, strides=15, padding='same', name='max_pooling')(dense1)
-    softmax = tf.keras.layers.Softmax(axis=1)(max_pool)
-    # final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense1)
+    gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=25, return_sequences=True), name='GRU')(interval)
+    dense1 = layers.TimeDistributed(tf.keras.layers.Dense(100, activation='relu'), name='dense')(gru)
+    # max_pool = tf.keras.layers.MaxPooling1D(pool_size=15*15, strides=15*15, padding='same', name='max_pooling')(dense1)
+    final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense1)
 
-    model = tf.keras.models.Model(inputs=input_signal, outputs=softmax)
-    model.add_loss(tf.reduce_mean(tf.abs(z)-1) * 1e-6)
+    model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
+    model.add_loss(tf.reduce_mean(tf.abs(z)-1) * 1e-2)
     return model
 
 
@@ -197,6 +192,15 @@ def get_conventional_model(state_len=None,
     final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense1)
 
     model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
+    return model
+
+
+def get_classification_model():
+    input_signal = tf.keras.layers.Input(shape=(None, 1))
+    max_pool = tf.keras.layers.MaxPooling1D(pool_size=15*30, strides=15*30, padding='same', name='max_pooling')(input_signal)
+
+    softmax = tf.keras.layers.Softmax(axis=1)(max_pool)
+    model = tf.keras.models.Model(inputs=input_signal, outputs=max_pool)
     return model
 
 
