@@ -47,7 +47,7 @@ def main():
     middle_diff = []
     all_filenames = get_all_filenames(entire_dataset=False)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in range(1,24):  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in [3, 5, 11, 13, 19, 22, 23]:  # ["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
         test_patient = str(test_id)
         train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
@@ -85,14 +85,14 @@ def main():
         # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
         early_stopping = EarlyStopping(
-            monitor="loss", patience=50, restore_best_weights=True)
+            monitor="loss", patience=5, restore_best_weights=True)
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
         print("input shape: {}".format(train_data.shape))
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss=weighted_bce)
 
         vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=25,
+                          validation_data=(val_data, val_label), batch_size=1, epochs=40,
                           callbacks=[early_stopping, history])
             # for layer in vae_mmd_model.layers:
             #     print("name : {}".format(layer.name))
@@ -216,7 +216,7 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'concatenated_v63'
+    source_model = 'weighted_v65'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
@@ -226,21 +226,21 @@ def across_dataset():
                                                                                         source_arch,
                                                                                         source_model,
                                                                                         -1)
-    trained_model = tf.keras.models.load_model(save_path)
+    trained_model = tf.keras.models.load_model(save_path, compile=False)
     for pat_id in range(30):
         # pat = pat_id
         pat = pat_list[pat_id]
         diff_pat, not_detected_pat = inference(pat, trained_model, subdirname, dataset='Epilepsiae')
         diffs.update(diff_pat)
         nc.update(not_detected_pat)
-    json.dump(diffs, open("../output/json/result_{}.json".format(datetime.datetime.now()), "w"))
+    # json.dump(diffs, open("../output/json/result_{}.json".format(datetime.datetime.now()), "w"))
     print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(list(diffs.values())), np.mean(list(diffs.values()))))
-    print("Not detected patients: {}".format(nc))
+    # print("Not detected patients: {}".format(nc))
 
-    # diffs_minute = [x / 15.0 for x in diffs]
-    # plt.figure()
-    # plt.hist(diffs_minute, bins=150, range=(0, 200))
-    # plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
+    diffs_minute = [x / 15.0 for x in list(diffs.values())]
+    plt.figure()
+    plt.hist(diffs_minute, bins=150, range=(0, 200))
+    plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
 
 
 if __name__ == "__main__":

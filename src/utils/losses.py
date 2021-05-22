@@ -90,7 +90,7 @@ def log_normal_pdf(sample, mean, logvar, raxis=1):
 
 
 def weighted_bce(y_true, y_pred):
-    weights = (y_true * 30.) + 1.
+    weights = (y_true * 20.) + 1.
     # true_flatten = tf.keras.backend.flatten(y_true)
     # pred_flatten = tf.keras.backend.flatten(y_pred)
     bce = tf.keras.backend.binary_crossentropy(y_true, y_pred)
