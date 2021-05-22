@@ -8,7 +8,8 @@ import tensorflow as tf
 from sklearn.metrics.pairwise import polynomial_kernel
 import matplotlib.pyplot as plt
 from utils.params import pat_list
-from utils.data import get_epilepsiae_test
+from utils.data import get_epilepsiae_test, build_dataset_pickle
+from utils.gru_visualization import get_within_between
 
 sys.path.append("../")
 LOG = logging.getLogger(os.path.basename(__file__))
@@ -110,7 +111,7 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    source_arch = 'vae_unsupervised'
+    source_arch = 'vae_supervised'
     test_arch = 'Epilepsiae_un'
     beta = 1e-05
     latent_dim = 16
@@ -146,11 +147,12 @@ def main():
     middle_diff = []
     z_dict = {}
     # for test_patient in range(1,25):
-    for pat_id in range(30):
-        test_patient = pat_list[pat_id]
-        source_pat = 1
-        # sessions = build_dataset_pickle(test_patient=test_patient)
-        sessions = get_epilepsiae_test(test_patient=test_patient)
+    J_list = {}
+    for pat_id in range(1,25):
+        # test_patient = pat_list[pat_id]
+        source_pat = pat_id
+        sessions = build_dataset_pickle(test_patient=pat_id)
+        # sessions = (test_patient=test_patient)
 
         # Load the specific weights for the model
         dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma, source_pat)
@@ -166,7 +168,7 @@ def main():
             # if test_patient != patient_num:
             #     continue
 
-            LOG.info("session name: {}".format(test_patient))
+            LOG.info("session name: {}".format(pat_id))
             X = sessions[node]['data']
             LOG.info("session number: {}".format(len(X)))
             y_true = sessions[node]['label']
@@ -178,6 +180,11 @@ def main():
 
             latent = intermediate_model.predict(X)[2]
             z_dict[node] = latent
+            print("Z space {} : {}".format(node, latent.shape))
+            print("y true: {}".format(y_true.shape))
+            Sb, Sw, J = get_within_between(latent, y_true)
+            J_list[node] = J
+            continue
 
             K = kernel(latent)
             mmd_maximum, mmd = get_changing_points(K, 1)
@@ -210,6 +217,7 @@ def main():
     # with open("../output/z_16.pickle", "wb") as pickle_file:
     #     pickle.dump(z_dict, pickle_file)
 
+    print("J s: {}".format(J_list))
     print(middle_diff)
     plt.figure()
     plt.hist(middle_diff)

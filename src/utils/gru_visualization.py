@@ -6,7 +6,7 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from utils.data import dataset_training, get_non_seizure_signal, get_epilepsiae_seizures, get_epilepsiae_test, \
     get_new_conv_w, get_epilepsiae_non_seizure, build_dataset_pickle as test_dataset
-from vae_mmd import plot_mmd
+# from vae_mmd import plot_mmd
 from scipy.ndimage import gaussian_filter1d
 from sklearn.metrics import roc_curve, auc, accuracy_score, f1_score
 from utils.params import pat_list
@@ -66,18 +66,16 @@ def get_within_between(z, y_true):
     w_s = np.sum(np.square(z_seizure - m_s))
     w_n = np.sum(np.square(z_non_seizure - m_n))
     S_w = w_n + w_s
-    print("Mean Class\nSeizure: {}\nNon-Seizure: {}".format(m_s, m_n))
-    print("Sb: {}".format(S_b))
-    print("Sw : {}".format(S_w))
+    # print("Mean Class\nSeizure: {}\nNon-Seizure: {}".format(m_s, m_n))
+    # print("Sb: {}".format(S_b))
+    # print("Sw : {}".format(S_w))
     return S_b, S_w, S_b / S_w
 
 
 def load_model(test_patient):
     arch = 'vae_free'
     subdirname = "../../temp/vae_mmd/integrated/{}/{}/Anthony_v53".format(1024, arch)
-    # subdirname = "../../output/vae/vae_supervised/seg_n_1024/beta_1e-05/latent_dim_16/lr_0.0001/decay_0.5/gamma_0.0"
     save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
-    # save_path = '{}/test_{}/'.format(subdirname, test_patient)
     trained_model = tf.keras.models.load_model(save_path)
     print(trained_model.summary())
     intermediate_model = tf.keras.models.Model(inputs=trained_model.input,
@@ -272,11 +270,11 @@ if __name__ == "__main__":
     # model = load_model(1)
     # predict_(test_pat, model)
     # auc_list = []
-    # out_all = np.zeros(0)
-    # true_all = np.zeros(0)
-    # length = []
-    # J_list = {}
-    # model = load_model(-1)
+    out_all = np.zeros(0)
+    true_all = np.zeros(0)
+    length = []
+    J_list = {}
+    model = load_vae_model(1)
     # for test_pat in pat_list:
     #     out, true, J = predict_(test_pat, model)
     #     out_all = np.concatenate((out_all, out))
@@ -288,7 +286,7 @@ if __name__ == "__main__":
     # auc_total = get_accuracy(out_all, true_all)
     # dict_out = {'predict': out_all.tolist(), 'true': true_all.tolist()}
     # json.dump(dict_out, open('baseline_unseen.json', 'w'))
-    plot_roc()
+    # plot_roc()
     # print("Total AUC: {}".format(auc_total))
     #
     # print("J : {}".format(J_list))
