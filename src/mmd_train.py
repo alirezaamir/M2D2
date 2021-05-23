@@ -32,12 +32,12 @@ EXCLUDED_SIZE = 15
 interval_len = 4
 SEQ_LEN = 900
 STATE_LEN = 899
-LATENT_DIM = 32
+LATENT_DIM = 8
 
 
 def main():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/weighted_v65".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/weighted_l20_latent8_v65".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -47,7 +47,7 @@ def main():
     middle_diff = []
     all_filenames = get_all_filenames(entire_dataset=False)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in [3, 5, 11, 13, 19, 22, 23]:  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in range(1,24):  # ["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
         test_patient = str(test_id)
         train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
@@ -85,14 +85,14 @@ def main():
         # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
         early_stopping = EarlyStopping(
-            monitor="loss", patience=5, restore_best_weights=True)
+            monitor="loss", patience=15, restore_best_weights=True)
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
         print("input shape: {}".format(train_data.shape))
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss=weighted_bce)
 
         vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=40,
+                          validation_data=(val_data, val_label), batch_size=1, epochs=50,
                           callbacks=[early_stopping, history])
             # for layer in vae_mmd_model.layers:
             #     print("name : {}".format(layer.name))
@@ -104,9 +104,9 @@ def main():
             os.makedirs(savedir)
         vae_mmd_model.save(savedir)
 
-        diffs, _ = inference(int(test_patient), trained_model=vae_mmd_model, subdirname=subdirname, dataset='CHB')
-        middle_diff += diffs
-    #
+        # diffs, _ = inference(int(test_patient), trained_model=vae_mmd_model, subdirname=subdirname, dataset='CHB')
+        # middle_diff += diffs
+
     # print(middle_diff)
     # plt.figure()
     # plt.hist(middle_diff)
@@ -216,7 +216,7 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'weighted_v65'
+    source_model = 'weighted_latent8_v65'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
