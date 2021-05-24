@@ -164,7 +164,7 @@ def get_mmd_model(state_len=None,
                                       trainable=False)(mmd)
     gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=25, return_sequences=True), name='GRU')(interval)
     dense1 = layers.TimeDistributed(tf.keras.layers.Dense(100, activation='relu'), name='dense')(gru)
-    # max_pool = tf.keras.layers.MaxPooling1D(pool_size=15*15, strides=15*15, padding='same', name='max_pooling')(dense1)
+    # max_pool = tf.keras.layers.MaxPooling1D(pool_size=15*10, strides=15*10, padding='same', name='max_pooling')(dense1)
     final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense1)
 
     model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)

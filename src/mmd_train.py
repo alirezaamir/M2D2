@@ -32,12 +32,12 @@ EXCLUDED_SIZE = 15
 interval_len = 4
 SEQ_LEN = 900
 STATE_LEN = 899
-LATENT_DIM = 8
+LATENT_DIM = 32
 
 
 def main():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/weighted_l20_latent8_v65".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/weighted_l1_latent32_v65".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -45,22 +45,22 @@ def main():
     # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
     middle_diff = []
-    all_filenames = get_all_filenames(entire_dataset=False)
+    all_filenames = get_all_filenames(entire_dataset=True)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in range(1,24):  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in [-1]:  # ["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
         test_patient = str(test_id)
-        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
         # train_label = np.squeeze(train_label, axis=-1)
-        train_shrink_label = dt.get_y_label(train_label, 15*15)
-        print("New shape: {}".format(train_shrink_label.shape))
+        # train_shrink_label = dt.get_y_label(train_label, 15*10)
+        # print("New shape: {}".format(train_shrink_label.shape))
         # train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN,
         #                                                   state_len=STATE_LEN)
         # print("Label {}, Max {}".format(train_label.shape, np.max(train_label)))
-        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
         # val_label = np.squeeze(val_label, axis=-1)
-        val_shrink_label = dt.get_y_label(val_label, 15*15)
-        print("New shape: {}".format(val_label.shape))
+        # val_shrink_label = dt.get_y_label(val_label, 15*10)
+        # print("New shape: {}".format(val_label.shape))
         # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN,
         #                                               state_len=STATE_LEN)
 
@@ -69,7 +69,7 @@ def main():
         # if not os.path.exists(load_dirname):
         #     print("Model does not exist in {}".format(load_dirname))
         #     exit()
-        # model.load_weights(load_dirname)
+        # model.load_weig3hts(load_dirname)
 
         vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
@@ -85,14 +85,14 @@ def main():
         # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
         early_stopping = EarlyStopping(
-            monitor="loss", patience=15, restore_best_weights=True)
+            monitor="loss", patience=10, restore_best_weights=True)
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
         print("input shape: {}".format(train_data.shape))
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss=weighted_bce)
 
         vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=50,
+                          validation_data=(val_data, val_label), batch_size=1, epochs=40,
                           callbacks=[early_stopping, history])
             # for layer in vae_mmd_model.layers:
             #     print("name : {}".format(layer.name))
@@ -216,7 +216,7 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'weighted_latent8_v65'
+    source_model = 'weighted_l1_latent2_v65'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)

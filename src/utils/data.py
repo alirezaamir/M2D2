@@ -192,9 +192,10 @@ def get_epilepsiae_test(test_patient):
 
 def get_y_label(y_true, chunk_length):
     batch = y_true.shape[0]
-    reshaped = np.reshape(y_true, newshape=(batch ,900//chunk_length, chunk_length))
+    seq = y_true.shape[1]
+    reshaped = np.reshape(y_true, newshape=(batch ,seq//chunk_length, chunk_length))
     sum_y = np.sum(reshaped, axis=2)
-    return np.where(sum_y > 0, 1, 0)
+    return np.where(sum_y > 0, 1.0, 0.0)
 
 
 def get_new_conv_w(state_len, N=6, state_dim=7):
