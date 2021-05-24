@@ -28,11 +28,24 @@ def get_PCA(X, y, mmd_max, name):
     pca = PCA(n_components=2)
     components = pca.fit_transform(X)
     plt.figure()
-    plt.title(name)
-    plt.scatter(x=components[:, 0], y=components[:, 1], c=y)
-    plt.scatter(components[mmd_max, 0], components[mmd_max, 1], s=80, facecolors='none', edgecolors='r')
+    # plt.title(name)
+    plt.xticks(ticks=np.arange(0,11,2), fontsize=8)
+    plt.yticks(ticks=np.arange(-2,9,2), fontsize=8)
+    plt.grid(b=True, which='major', lw=0.2)
+    plt.grid(b=True, which='minor', lw=0.1)
+    plt.minorticks_on()
+    # plt.scatter(x=components[:, 0], y=components[:, 1], c=y)
+    for pca1, pca2, label in zip(components[:, 0], components[:, 1], y):
+        if label==0:
+            plt.scatter(pca1, pca2, marker='.', c='g')
+    for pca1, pca2, label in zip(components[:, 0], components[:, 1], y):
+        if label == 1:
+            plt.scatter(pca1, pca2, marker='+', c='r')
+    # plt.scatter(components[mmd_max, 0], components[mmd_max, 1], s=80, facecolors='none', edgecolors='r')
+    # plt.xlim([-2, 12])
+    # plt.ylim([-1, 8])
     print(mmd_max, components[mmd_max, :])
-    plt.show()
+    plt.savefig('../../output/images/z_{}_proposed.pdf'.format(name), format='pdf')
 
 
 def get_accuracy(y_predict, y_true):
@@ -44,13 +57,13 @@ def get_accuracy(y_predict, y_true):
 
 def plot_roc():
     plt.figure()
-    for method in ['baseline_unseen', 'proposed_unseen']:
+    for method in ['proposed_new_unseen', 'proposed_unseen']:
         data = json.load(open('{}.json'.format(method), 'r'))
         y_true = data['true']
         y_predict = data['predict']
         fpr, tpr, thresholds = roc_curve(y_true, y_predict)
-        plt.plot(fpr, tpr, marker='.')
-    plt.savefig()
+        plt.plot(fpr, tpr)
+    plt.show()
 
 
 def get_within_between(z, y_true):
@@ -74,14 +87,17 @@ def get_within_between(z, y_true):
 
 def load_model(test_patient):
     arch = 'vae_free'
-    subdirname = "../../temp/vae_mmd/integrated/{}/{}/Anthony_v53".format(1024, arch)
+    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/Anthony_v53".format(1024, arch)
+    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(1024, arch)
+    subdirname = "../../temp/vae_mmd/integrated/{}/{}/weighted_20_v65".format(1024, arch)
     save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
-    trained_model = tf.keras.models.load_model(save_path)
+    trained_model = tf.keras.models.load_model(save_path, compile=False)
     print(trained_model.summary())
     intermediate_model = tf.keras.models.Model(inputs=trained_model.input,
                                                outputs=[
                                                    trained_model.output,
-                                                   trained_model.get_layer('dense1').input])
+                                                   # trained_model.get_layer('dense1').input])
+                                                   trained_model.get_layer('latents').input])
     return intermediate_model
 
 
@@ -110,12 +126,12 @@ def predict_(test_patient, model):
         Sb, Sw, J = get_within_between(z, y_true)
         # print("Sw: {}, Sb: {}, J: {}".format(Sw, Sb, J))
         J_dict[node] = J
-        # mmd_argmax = np.argmax(out[0, STATE_LEN:-STATE_LEN, :])
         out = out[0, STATE_LEN:-STATE_LEN, 0]
+        # mmd_argmax = np.argmax(out)
         # plt.plot(out, 'r')
         out_list = np.concatenate((out_list, out))
         true_list = np.concatenate((true_list, y_true))
-        # get_PCA(z[0, STATE_LEN:-STATE_LEN, 0, :], y_true_section, mmd_argmax, node)
+        # get_PCA(z, y_true_section, mmd_argmax, node)
         # for idx in range(9):
         #     subdirname = "../../output/Conv/"
         #     mmd_edge_free = mmd_predicted[0, STATE_LEN:-STATE_LEN, idx]
@@ -266,15 +282,15 @@ def plot_loss():
 
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    # test_pat = 'pat_102'
+    # test_pat = 'pat_8902'
     # model = load_model(1)
     # predict_(test_pat, model)
     # auc_list = []
-    out_all = np.zeros(0)
-    true_all = np.zeros(0)
-    length = []
-    J_list = {}
-    model = load_vae_model(1)
+    # out_all = np.zeros(0)
+    # true_all = np.zeros(0)
+    # length = []
+    # J_list = {}
+    # model = load_model(-1)
     # for test_pat in pat_list:
     #     out, true, J = predict_(test_pat, model)
     #     out_all = np.concatenate((out_all, out))
@@ -285,8 +301,8 @@ if __name__ == "__main__":
     #     # auc_list.append(auc_pat)
     # auc_total = get_accuracy(out_all, true_all)
     # dict_out = {'predict': out_all.tolist(), 'true': true_all.tolist()}
-    # json.dump(dict_out, open('baseline_unseen.json', 'w'))
-    # plot_roc()
+    # json.dump(dict_out, open('proposed_new_unseen.json', 'w'))
+    plot_roc()
     # print("Total AUC: {}".format(auc_total))
     #
     # print("J : {}".format(J_list))
