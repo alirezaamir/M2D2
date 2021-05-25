@@ -85,7 +85,7 @@ def main():
 
 
 def train_model(model, dirname, lr_init, decay, beta, test_patient):
-    max_epochs = 5  # 200
+    max_epochs = 3  # 200
     patience = 20
     batch_size = 32
     beta_start_epoch = 10
@@ -107,7 +107,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     if not os.path.exists(savedir):
         os.makedirs(savedir)
 
-    for iter in range(12):
+    for iter in range(4):
         train_data, train_label = get_dataset("train", test_patient, all_filenames)
         print("Shape :{}, {}".format(train_data.shape, train_label.shape))
         valid_data, valid_label = get_dataset("valid", test_patient, all_filenames)
@@ -124,24 +124,23 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
         gc.collect()
 
 
-
 def build_dataset_chb(mode, test_patient, all_filenames):
     # filenames = split_list(all_filenames[mode][test_patient], wanted_parts=PART_NUM)
     filenames = np.random.permutation(all_filenames[mode][test_patient])
-    number_files = len(filenames) // PART_NUM if mode == "train" else len(filenames)
-    data_len = get_data_len(filenames[:number_files])
-    X_total = np.zeros((data_len, SEG_N, 2))
-    y_total = np.zeros((data_len,))
+    # number_files = len(filenames) // PART_NUM if mode == "train" else len(filenames)
+    # data_len = get_data_len(filenames[:number_files])
+    X_total = np.zeros((0, SEG_N, 2))
+    y_total = np.zeros((0,))
 
     last_pointer = 0
     # patient_dict = {pat_num: 0 for pat_num in range(1, 25)}
-    for filename in filenames[:number_files]:
+    for filename in filenames:
         with open(filename, "rb") as pickle_file:
             data = pickle.load(pickle_file)
-            file_data_len = np.array(data["X"]).shape[0]
-            X_total[last_pointer: last_pointer + file_data_len] = np.array(data["X"])
-            y_total[last_pointer: last_pointer + file_data_len] = np.array(data["y"])
-            last_pointer += file_data_len
+            if np.sum(data["y"]) == 0 and np.random.random() < 0.9:           # To make the dataset balanced
+                continue
+            X_total = np.concatenate((X_total, np.array(data["X"])))
+            y_total = np.concatenate((y_total, np.array(data["y"])))
 
     return X_total, y_total
 

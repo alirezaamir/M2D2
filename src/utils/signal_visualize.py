@@ -2,7 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from utils.data import build_dataset_pickle as test_dataset
-from utils.data import get_non_seizure_signal
+from utils.data import get_non_seizure_signal, get_epilepsiae_test
+from utils.params import pat_list
 
 
 def load_model(test_patient, model_name):

@@ -86,6 +86,7 @@ def mmd_loss(source_samples, target_samples, scope=None):
 
 def log_normal_pdf(sample, mean, logvar, raxis=1):
     log2pi = tf.math.log(2. * np.pi)
-    return tf.reduce_sum(-0.5 * ((sample - mean) ** 2. * tf.exp(-logvar) + logvar + log2pi), axis=raxis)
+    log_clipped = tf.clip_by_value(logvar, -20, 20)
+    return tf.reduce_sum(-0.5 * ((sample - mean) ** 2. * tf.exp(-log_clipped) + logvar + log2pi), axis=raxis)
 
 

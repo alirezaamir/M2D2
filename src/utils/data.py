@@ -227,7 +227,7 @@ def build_dataset_pickle(test_patient, root='..'):
         for filename in filenames:
             with open(filename, "rb") as pickle_file:
                 pickle_name = filename.split('/')[-1]
-                name = pickle_name[:8]
+                name = pickle_name[:-7]
                 data = pickle.load(pickle_file)
                 x = np.array(data["X"])
                 y = np.array(data["y"])
