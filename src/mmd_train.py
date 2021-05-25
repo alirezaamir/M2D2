@@ -32,6 +32,7 @@ EXCLUDED_SIZE = 15
 interval_len = 4
 SEQ_LEN = 900
 STATE_LEN = 899
+EDGE_LEN = 100
 LATENT_DIM = 32
 
 
@@ -142,81 +143,99 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
 
         if np.sum(y_true) == 0:
             continue
+        middle_diff[node] = {}
+        for t_duration in [0, 4, 8, 15, 37, 75]:
+            start_remove = []
+            stop_remove = []
+            for attempt in range(3): # [-1]:  # range(X.shape[0]//SEQ_LEN):  #
+                # y_true_section = y_true[SEQ_LEN*section:SEQ_LEN*(section+1)]
+                #
+                # if np.sum(y_true_section) == 0:
+                #     continue
+                #
+                # X_section = X[SEQ_LEN*section:SEQ_LEN*(section+1)]
+                # y_true_section = np.concatenate((np.zeros(STATE_LEN), y_true_section, np.zeros(STATE_LEN)))
+                X_section = X
+                print("X shape before :{}".format(X_section.shape))
+                for start, stop in zip(start_remove, stop_remove):
+                    print("Start remove:{}, Stop Remove :{} ".format(start, stop))
+                    X_section = np.delete(X_section, range(start, stop), axis=0)
+                print("X shape after :{}".format(X_section.shape))
+                # y_true_section = np.concatenate((np.zeros(STATE_LEN), y_true, np.zeros(STATE_LEN)))
+                y_true_section = y_true
+                for start, stop in zip(start_remove, stop_remove):
+                    y_true_section = np.delete(y_true_section, range(start, stop), axis=0)
 
-        for section in [-1]: # [-1]:  # range(X.shape[0]//SEQ_LEN):  #
-            # y_true_section = y_true[SEQ_LEN*section:SEQ_LEN*(section+1)]
-            #
-            # if np.sum(y_true_section) == 0:
-            #     continue
-            #
-            # X_section = X[SEQ_LEN*section:SEQ_LEN*(section+1)]
-            # y_true_section = np.concatenate((np.zeros(STATE_LEN), y_true_section, np.zeros(STATE_LEN)))
+                if np.sum(y_true_section) == 0:
+                    middle_diff[node]["{}_{}".format(t_duration, attempt)] = -1
+                    continue
 
-            X_section = X
-            # y_true_section = np.concatenate((np.zeros(STATE_LEN), y_true, np.zeros(STATE_LEN)))
-            y_true_section = y_true
+                X_section = np.expand_dims(X_section, 0)
+                print("X Shape: {}".format(X_section.shape))
+                X_edge = non_seizure_dataset(test_patient, state_len= EDGE_LEN)
+                print("X edge : {}".format(X_edge.shape))
+                print("Edge Shape: {}".format(X_edge.shape))
+                concatenated = np.concatenate((X_edge, X_section, X_edge), axis=1)
+                print("Concatenate Shape: {}".format(concatenated.shape))
+                X_section = concatenated
 
-            X_section = np.expand_dims(X_section, 0)
-            print("X Shape: {}".format(X_section.shape))
-            X_edge = non_seizure_dataset(test_patient, state_len=STATE_LEN)
-            print("X edge : {}".format(X_edge.shape))
-            print("Edge Shape: {}".format(X_edge.shape))
-            concatenated = np.concatenate((X_edge, X_section, X_edge), axis=1)
-            print("Concatenate Shape: {}".format(concatenated.shape))
-            X_section = concatenated
+                mmd_predicted = vae_mmd_model.predict(X_section)
+                print("Predict : {}".format(mmd_predicted.shape))
+                mmd_edge_free = mmd_predicted[:, EDGE_LEN:-EDGE_LEN, :]
+                mmd_maximum = [np.argmax(mmd_edge_free)]
+                start_detected_point = max(np.argmax(mmd_edge_free)-t_duration, 0)
+                start_remove.append(start_detected_point)
+                stop_detected_point = min(np.argmax(mmd_edge_free)+t_duration+1, X_section.shape[1])
+                stop_remove.append(stop_detected_point)
+                # name = "{}_{}".format(node, section)
+                # plot_mmd(mmd_edge_free[0, :, 0], mmd_maximum, y_true_section, name, subdirname)
 
-            mmd_predicted = vae_mmd_model.predict(X_section)
-            print("Predict : {}".format(mmd_predicted.shape))
-            mmd_edge_free = mmd_predicted[:, STATE_LEN:-STATE_LEN, :]
-            mmd_maximum = [np.argmax(mmd_edge_free)]
-            name = "{}_{}".format(node, section)
-            plot_mmd(mmd_edge_free[0, :, 0], mmd_maximum, y_true_section, name, subdirname)
+                y_non_zero = np.where(y_true_section > 0, 1, 0)
+                y_non_zero = np.concatenate((y_non_zero, [0]))
+                # For sections which have seizure at the end or start of the section
+                y_non_zero = np.concatenate(([0], y_non_zero,))
+                y_diff = np.diff(y_non_zero)
+                start_points = np.where(y_diff > 0)[0]
+                stop_points = np.where(y_diff < 0)[0]
 
-            y_non_zero = np.where(y_true_section > 0, 1, 0)
-            y_non_zero = np.concatenate((y_non_zero, [0]))
-            # For sections which have seizure at the end or start of the section
-            y_non_zero = np.concatenate(([0], y_non_zero,))
-            y_diff = np.diff(y_non_zero)
-            start_points = np.where(y_diff > 0)[0]
-            stop_points = np.where(y_diff < 0)[0]
+                accepted_points = []
+                for start, stop in zip(start_points, stop_points):
+                    accepted_points += range(start, stop)
+                middle_points = (start_points + stop_points) // 2
+                LOG.info("start: {}, stop: {}\npoints: {}".format(start_points, stop_points, accepted_points))
 
-            accepted_points = []
-            for start, stop in zip(start_points, stop_points):
-                accepted_points += range(start, stop)
-            middle_points = (start_points + stop_points) // 2
-            LOG.info("start: {}, stop: {}\npoints: {}".format(start_points, stop_points, accepted_points))
+                t_diff = np.abs(accepted_points - mmd_maximum[0])
+                LOG.info("Time diff : {}".format(np.min(t_diff)))
 
-            t_diff = np.abs(accepted_points - mmd_maximum[0])
-            LOG.info("Time diff : {}".format(np.min(t_diff)))
-            if 0 < np.max(mmd_predicted) < 0.001:
-                not_detected[node] = (np.max(mmd_predicted), np.min(t_diff))
-            else:
-                middle_diff[node] = int(np.min(t_diff))
+                middle_diff[node]["{}_{}".format(t_duration, attempt)] = (int(np.min(t_diff)))
+
     return middle_diff, not_detected
 
 
 def get_results():
     arch = 'vae_free'
     subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(SEG_LENGTH, arch)
-    diffs = []
+    diffs = {}
     nc = {}
     for pat_id in range(1, 24):
         # pat = pat_list[pat_id]
         pat = pat_id
         diff_pat, not_detected_pat = inference(pat, None, subdirname, dataset='CHB')
-        diffs += diff_pat
+        diffs.update(diff_pat)
         nc.update(not_detected_pat)
-    print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
+    print("Differences: {}".format(diffs))
+    json.dump(diffs, open("AttemptsResults_proposed.json", "w"))
+    # print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(list(diffs.values())), np.mean(list(diffs.values()))))
     print("Not detected patients: {}".format(nc))
-    diffs_minute = [x / 15.0 for x in diffs]
-    plt.figure()
-    plt.hist(diffs_minute, bins=150, range=(0, 200))
-    plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
+    # diffs_minute = [x / 15.0 for x in list(diffs.values())]
+    # plt.figure()
+    # plt.hist(diffs_minute, bins=150, range=(0, 200))
+    # plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
 
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'weighted_l1_latent2_v65'
+    source_model = 'Anthony_v53'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
@@ -234,17 +253,18 @@ def across_dataset():
         diffs.update(diff_pat)
         nc.update(not_detected_pat)
     # json.dump(diffs, open("../output/json/result_{}.json".format(datetime.datetime.now()), "w"))
-    print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(list(diffs.values())), np.mean(list(diffs.values()))))
+    # print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(list(diffs.values())), np.mean(list(diffs.values()))))
     # print("Not detected patients: {}".format(nc))
-
-    diffs_minute = [x / 15.0 for x in list(diffs.values())]
-    plt.figure()
-    plt.hist(diffs_minute, bins=150, range=(0, 200))
-    plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
+    print("Differences: {}".format(diffs))
+    json.dump(diffs, open("AttemptsResults_ccnn_unseen.json", "w"))
+    # diffs_minute = [x / 15.0 for x in list(diffs.values())]
+    # plt.figure()
+    # plt.hist(diffs_minute, bins=150, range=(0, 200))
+    # plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
 
 
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    main()
+    # main()
     # get_results()
-    # across_dataset()
+    across_dataset()
