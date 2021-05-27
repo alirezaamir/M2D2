@@ -358,27 +358,56 @@ def inference(test_patient):
     features_dict = pickle.load(open("../test_code/Features_Eglass_new_epilepsiae.pickle", "rb"))
 
     test_files = features_dict.keys()
+
+    middle_diff = {}
     for pat_file in test_files:
-        test_data = features_dict[pat_file]['X']
-        np.nan_to_num(test_data, copy=False)
-        test_label = features_dict[pat_file]['y']
+        middle_diff[pat_file] = {}
+        for t_duration in [0, 4, 8, 15, 37, 75]:
+            start_remove = []
+            stop_remove = []
+            for attempt in range(3):
+                test_data = features_dict[pat_file]['X']
+                np.nan_to_num(test_data, copy=False)
+                test_label = features_dict[pat_file]['y']
 
-        y_non_zero = np.where(test_label > 0, 1, 0)
-        y_non_zero = np.concatenate((y_non_zero, [0]))
-        # For sections which have seizure at the end or start of the section
-        y_non_zero = np.concatenate(([0], y_non_zero,))
-        y_diff = np.diff(y_non_zero)
-        start_points = np.where(y_diff > 0)[0]
-        stop_points = np.where(y_diff < 0)[0]
+                X_section = test_data
+                for start, stop in zip(start_remove, stop_remove):
+                    X_section = np.delete(X_section, range(start, stop), axis=0)
 
-        accepted_points = []
-        for start, stop in zip(start_points, stop_points):
-            accepted_points += range(start, stop)
+                y_true_section = test_label
+                for start, stop in zip(start_remove, stop_remove):
+                    y_true_section = np.delete(y_true_section, range(start, stop), axis=0)
 
-        predict = rf.predict_proba(test_data)
-        rf_max = np.argmax(predict[:, 1])
-        t_diff = np.abs(accepted_points - rf_max)
-        print("Pat : {} - Time diff: {} ".format(pat_file, np.min(t_diff)))
+                if np.sum(y_true_section) == 0:
+                    middle_diff[pat_file]["{}_{}".format(t_duration, attempt)] = -1
+                    continue
+
+                y_non_zero = np.where(y_true_section > 0, 1, 0)
+                y_non_zero = np.concatenate((y_non_zero, [0]))
+                # For sections which have seizure at the end or start of the section
+                y_non_zero = np.concatenate(([0], y_non_zero,))
+                y_diff = np.diff(y_non_zero)
+                start_points = np.where(y_diff > 0)[0]
+                stop_points = np.where(y_diff < 0)[0]
+
+                accepted_points = []
+                for start, stop in zip(start_points, stop_points):
+                    accepted_points += range(start, stop)
+
+                predict = rf.predict_proba(X_section)
+                rf_max = np.argmax(predict[:, 1])
+
+                start_detected_point = max(rf_max - t_duration, 0)
+                start_remove.append(start_detected_point)
+                stop_detected_point = min(rf_max + t_duration + 1, X_section.shape[0])
+                stop_remove.append(stop_detected_point)
+
+                t_diff = np.abs(accepted_points - rf_max)
+                print("Pat : {}_ t{} _ n{} - Time diff: {} ".format(pat_file, t_duration, attempt, np.min(t_diff)))
+
+                middle_diff[pat_file]["{}_{}".format(t_duration, attempt)] = (int(np.min(t_diff)))
+
+    print(middle_diff)
 
 
 if __name__ == '__main__':
