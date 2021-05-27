@@ -69,7 +69,6 @@ def predict_(test_patient, model_proposed, model_baseline):
         plt.savefig("../../output/signals/{}".format(node))
 
 
-
 proposed = np.dot(
     [0, 0, 0, 0, 0, 0, 0, 94, 11, 0, 0, 0, 0, 0, 0, 0, 0, 113, 0, 0, 0, 0, 0, 0, 1590, 380, 3156, 1024,
      659, 340, 927, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2752, 3, 0, 0, 0, 0, 0, 2, 0, 3, 0, 71, 0, 0, 1, 153,
@@ -90,6 +89,24 @@ manual = np.dot([0, 0, 0, 0, 0, 0, 0, 86, 14, 11, 17, 339, 578, 9, 5, 0, 346, 10
                  463, 501, 185, 0, 0, 222, 13, 11, 129, 596, 0, 0, 0, 63, 460, 0, 7, 220, 0, 87, 280, 135, 459, 0,
                  0,
                  243, 254, 0, 0], 4)
+
+eglass = np.dot(
+    [0, 0, 0, 0, 0, 0, 3, 0, 87, 13, 0, 0, 0, 0, 0, 0, 0, 306, 107, 0, 0, 0, 0, 0, 0, 61, 405, 2631, 1032, 94, 14, 185,
+     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2927, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 436, 432, 0, 0, 160, 0, 97, 0, 49, 50, 0, 3, 0,
+     140, 26, 32, 102, 282, 619, 0, 110, 225, 185, 280, 269, 211, 243, 55, 149, 0, 2, 0, 23, 2, 95, 314, 0, 193, 0, 0,
+     405, 0, 20, 183, 43, 303, 8, 183, 0, 0, 184, 7, 224, 0, 230, 9, 460, 0, 0, 0, 0, 0, 0, 0, 0, 0, 151, 0, 0, 463, 0,
+     0, 0, 252, 0, 0], 4)
+eglass_epilepsiae = np.dot(
+    [3, 314, 166, 573, 52, 12, 40, 0, 238, 45, 0, 39, 0, 227, 107, 42, 196, 169, 143, 1, 0, 55, 265, 640, 59, 70,
+     0, 0, 0, 0, 658, 40, 0, 209, 413, 107, 338, 670, 217, 156, 2, 195, 132, 307, 181, 0, 141, 158, 275, 402,
+     594, 352, 0, 80, 58, 214, 0, 7, 25, 0, 298, 3, 13, 1, 624, 0, 543, 0, 509, 511, 6, 339, 8, 124, 254, 142,
+     344, 22, 552, 97, 0, 0, 0, 9, 296, 32, 0, 0, 0, 0, 0, 303, 454, 102, 14, 23, 31, 56, 38, 84, 241, 523, 656,
+     250, 0, 225, 0, 69, 279, 0, 0, 137, 341, 416, 0, 406, 298, 158, 0, 147, 111, 0, 0, 0, 0, 24, 0, 0, 450, 306,
+     0, 0, 0, 532, 148, 279, 544, 29, 25, 0, 61, 14, 0, 98, 208, 0, 4, 600, 0, 9, 0, 0, 242, 128, 241, 133, 0, 2,
+     136, 0, 0, 0, 78, 0, 0, 647, 463, 0, 801, 508, 6, 0, 345, 468, 14, 0, 449, 0, 157, 46, 379, 174, 274, 85,
+     371, 0, 482, 226, 140, 0, 0, 375, 0, 0, 0, 0, 107, 43, 332, 593, 0, 505, 268, 105, 142, 0, 0, 466, 0, 0, 0,
+     0, 466, 270, 93, 0, 27, 428, 256, 84, 140, 164, 363, 95, 540, 782, 0, 3, 395, 266, 436, 17, 0, 0, 10, 7, 0,
+     107, 0, 0, 0, 0, 222, 61, 773, 207, 0, 0, 398, 0, 456, 201, 33, 0, 639, 40, 0, 154, 0, 389, 0, 0], 4)
 
 proposed_epilepsiae = np.dot(
     [10, 314, 166, 0, 0, 2, 574, 2, 12, 138, 0, 0, 0, 0, 177, 9, 195, 289, 0, 3, 0, 0, 264, 10, 151, 0, 0, 0, 0, 0,
@@ -128,6 +145,7 @@ manual_epilepsiae = np.dot(
      765, 676, 266, 219, 173, 380, 20, 15, 0, 238, 148, 154, 9, 250, 0, 43, 188, 0, 335, 84, 771, 208, 402, 422,
      541, 477, 269, 233, 5, 40, 548, 23, 107, 178, 225, 419, 785, 0], 4)
 
+
 def plot_box():
     # fig, ax = plt.subplots(figsize=(8, 6))
     # colors = ['pink', 'lightblue', 'lightgreen']
@@ -142,32 +160,32 @@ def plot_box():
     #            fontsize=14)
     # plt.ylabel('Time (min)', fontsize=16)
 
-    boxprops = dict( linewidth=3, color='black')
-    capprops = dict( linewidth=3)
+    boxprops = dict(linewidth=3, color='black')
+    capprops = dict(linewidth=3)
     flierprops = dict(marker='x', markerfacecolor='red', markersize=8,
                       markeredgecolor='red')
     medianprops = dict(linewidth=3.5, color='firebrick')
 
-    all_data = [proposed_epilepsiae, baseline_epilepsiae, manual_epilepsiae]
-    labels = ['Proposed', 'C-CNN', 'Manual MMD']
+    # all_data = [proposed_epilepsiae, baseline_epilepsiae, manual_epilepsiae, eglass_epilepsiae]
+    all_data = [proposed, baseline, manual, eglass]
+    labels = ['Proposed', 'Baseline VIB', 'Baseline MMD', 'E-Glass']
 
-    fig, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(8, 6))
+    fig, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(9, 6))
 
     # rectangular box plot
     bplot1 = ax1.boxplot(all_data,
                          whis=[5, 95],
                          patch_artist=True,  # fill with color
-                         boxprops=boxprops, medianprops = medianprops , capprops = capprops, flierprops= flierprops,
-                         whiskerprops = capprops)  # will be used to label x-ticks
+                         boxprops=boxprops, medianprops=medianprops, capprops=capprops, flierprops=flierprops,
+                         whiskerprops=capprops)  # will be used to label x-ticks
     # ax1.set_title('Rectangular box plot')
     ax1.set_ylim([-20, 3600])
     ax1.set_ylabel('Time (min)', fontsize=16)
     ax1.set_yticks(ticks=np.arange(0, 3601, step=600))
     ax1.set_yticklabels(labels=[" {}".format(str(i)) for i in np.arange(0, 61, step=10)],
-               fontsize=14)
-    ax1.set_xticklabels( labels=labels, fontsize=14)
+                        fontsize=14)
+    ax1.set_xticklabels(labels=labels, fontsize=14)
     plt.grid(axis='y')
-
 
     # notch shape box plot
     # bplot2 = ax1.boxplot(all_data,
@@ -178,27 +196,28 @@ def plot_box():
     # ax1.set_title('Notched box plot')
 
     # fill with colors
-    colors = ['pink', 'lightblue', 'lightgreen']
+    colors = ['pink', 'lightblue', 'lightgreen', 'navajowhite']
     for bplot in (bplot1, bplot1):
         for patch, color in zip(bplot['boxes'], colors):
             patch.set_facecolor(color)
     # plt.show()
-    plt.savefig('../../output/images/unseen')
+    plt.savefig('../../output/images/proposed.pdf', format='pdf')
 
 
 def time_table():
     for time_expected in [0, 15, 30, 60, 150, 300]:
-        for result, name in zip([proposed_epilepsiae, baseline_epilepsiae, manual_epilepsiae], ["proposed", "CCNN", "MMD"]):
+        for result, name in zip([proposed_epilepsiae, baseline_epilepsiae, manual_epilepsiae],
+                                ["proposed", "CCNN", "MMD"]):
             cnt = np.count_nonzero(result <= time_expected)
-            print("{} Time: {} = {},{:.2f}%".format(name, time_expected, cnt, cnt/262.))
+            print("{} Time: {} = {},{:.2f}%".format(name, time_expected, cnt, cnt / 262.))
 
 
 if __name__ == '__main__':
     tf.config.experimental.set_visible_devices([], 'GPU')
-    test_pat = 3
-    model_proposed = load_model(test_patient=test_pat, model_name='z_minus1_v52')
-    model_baseline = load_model(test_patient=test_pat, model_name='Anthony_v53')
-    for test_pat in range(1,24):
-        predict_(test_patient=test_pat, model_proposed=model_proposed, model_baseline = model_baseline)
-    # plot_box()
+    # test_pat = 3
+    # model_proposed = load_model(test_patient=test_pat, model_name='z_minus1_v52')
+    # model_baseline = load_model(test_patient=test_pat, model_name='Anthony_v53')
+    # for test_pat in range(1, 24):
+    #     predict_(test_patient=test_pat, model_proposed=model_proposed, model_baseline=model_baseline)
+    plot_box()
     # time_table()
