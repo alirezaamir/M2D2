@@ -88,8 +88,8 @@ def get_within_between(z, y_true):
 def load_model(test_patient):
     arch = 'vae_free'
     # subdirname = "../../temp/vae_mmd/integrated/{}/{}/Anthony_v53".format(1024, arch)
-    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(1024, arch)
-    subdirname = "../../temp/vae_mmd/integrated/{}/{}/weighted_20_v65".format(1024, arch)
+    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v62".format(1024, arch)
+    subdirname = "../../temp/vae_mmd/integrated/{}/{}/proposed_l16_v70".format(1024, arch)
     save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
     trained_model = tf.keras.models.load_model(save_path, compile=False)
     print(trained_model.summary())
@@ -97,7 +97,8 @@ def load_model(test_patient):
                                                outputs=[
                                                    trained_model.output,
                                                    # trained_model.get_layer('dense1').input])
-                                                   trained_model.get_layer('latents').input])
+                                                   # trained_model.get_layer('latents').input])
+                                                   trained_model.get_layer('MMD').input])
     return intermediate_model
 
 
@@ -122,7 +123,7 @@ def predict_(test_patient, model):
         X_section = np.concatenate((X_edge, X_section, X_edge), axis=1)
 
         out, z = model.predict(X_section)
-        z = z[0, STATE_LEN:-STATE_LEN, :]
+        z = z[0, STATE_LEN:-STATE_LEN, 0, :]
         Sb, Sw, J = get_within_between(z, y_true)
         # print("Sw: {}, Sb: {}, J: {}".format(Sw, Sb, J))
         J_dict[node] = J
@@ -289,22 +290,22 @@ if __name__ == "__main__":
     # out_all = np.zeros(0)
     # true_all = np.zeros(0)
     # length = []
-    # J_list = {}
-    # model = load_model(-1)
-    # for test_pat in pat_list:
-    #     out, true, J = predict_(test_pat, model)
+    J_list = {}
+    model = load_model(-1)
+    for test_pat in pat_list:
+        out, true, J = predict_(test_pat, model)
     #     out_all = np.concatenate((out_all, out))
     #     true_all = np.concatenate((true_all, true))
-    #     J_list.update(J)
+        J_list.update(J)
     #     # print(auc_list)
     #     # print(length)
     #     # auc_list.append(auc_pat)
     # auc_total = get_accuracy(out_all, true_all)
     # dict_out = {'predict': out_all.tolist(), 'true': true_all.tolist()}
     # json.dump(dict_out, open('proposed_new_unseen.json', 'w'))
-    plot_roc()
+    # plot_roc()
     # print("Total AUC: {}".format(auc_total))
     #
-    # print("J : {}".format(J_list))
+    print("J : {}".format(J_list))
     # plot_AUCs()
     # plot_loss()

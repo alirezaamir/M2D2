@@ -96,7 +96,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     scheduler = LearningRateScheduler(lambda x, y: lr_init * np.exp(-decay * x))
     beta_annealing = AnnealingCallback(beta, beta_start_epoch, max_epochs)
 
-    all_filenames = get_all_filenames(entire_dataset=False)
+    all_filenames = get_all_filenames(entire_dataset=True)
     print(all_filenames["train"][test_patient])
     savedir = dirname + '/saved_model/'
     if not os.path.exists(savedir):
@@ -107,7 +107,7 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     if not os.path.exists(savedir):
         os.makedirs(savedir)
 
-    for iter in range(4):
+    for iter in range(6):
         train_data, train_label = get_dataset("train", test_patient, all_filenames)
         print("Shape :{}, {}".format(train_data.shape, train_label.shape))
         valid_data, valid_label = get_dataset("valid", test_patient, all_filenames)

@@ -34,8 +34,8 @@ def build_VAE_model(input_shape=None,
     #
     y_true = layers.Input(shape=(1), name="true_label")
 
-    cl_dense1 = layers.Dense(enc_dimension, activation="relu", name="classifier_dense1")(z)
-    cl_dense2 = layers.Dense(1, activation='sigmoid', name="classifier_dense2")(cl_dense1)
+    # cl_dense1 = layers.Dense(enc_dimension, activation="relu", name="classifier_dense1")(z)
+    # cl_dense2 = layers.Dense(1, activation='sigmoid', name="classifier_dense2")(cl_dense1)
 
     latent_inputs = layers.Input(shape=(enc_dimension,), name='z_sampling')
     q = layers.Dense(shape[1] * shape[2], activation="relu")(latent_inputs)
@@ -57,9 +57,9 @@ def build_VAE_model(input_shape=None,
     logqz_x = log_normal_pdf(z, mu, sigma)
     divergence = K.mean(-logpz + logqz_x)
 
-    classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=cl_dense2))
+    # classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=cl_dense2))
 
-    cost = recons_cost + beta * divergence + gamma * classification_cost
+    cost = recons_cost + beta * divergence # + gamma * classification_cost
 
     model = models.Model(inputs=[ii, y_true], outputs=x_hat)
     model.add_loss(cost)
