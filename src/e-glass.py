@@ -236,7 +236,7 @@ def prepare_pickle_files():
 def classify():
     features_dict = pickle.load(open("../test_code/Features_Eglass_chb.pickle", "rb"))
     middle_diff = []
-    for test_patient in range(1,24):
+    for test_patient in [1]: #range(1,24):
         train_files = [x for x in features_dict.keys() if not x.startswith("chb{:02d}".format(test_patient))]
         test_files = [x for x in features_dict.keys() if x.startswith("chb{:02d}".format(test_patient))]
         train_data = np.zeros((0,108))
@@ -266,7 +266,7 @@ def classify():
             train_label_balanced = train_label_balanced[idx]
 
             rf.fit(train_data_balanced, train_label_balanced)
-        pickle.dump(rf, open("model_{}.pickle".format(test_patient), "wb"))
+        pickle.dump(rf, open("../test_code/model_{}.pickle".format(test_patient), "wb"))
 
         for pat_file in test_files:
             test_data = features_dict[pat_file]['X']
@@ -324,7 +324,7 @@ def classify_epilepsiae():
 
         rf.fit(train_data_balanced, train_label_balanced)
 
-    pickle.dump(rf, open("model_{}.pickle".format(-1), "wb"))
+    pickle.dump(rf, open("../test_code/model_{}.pickle".format(-1), "wb"))
     features_dict = pickle.load(open("../test_code/Features_Eglass_new_epilepsiae.pickle", "rb"))
 
     test_files = features_dict.keys()
@@ -354,10 +354,11 @@ def classify_epilepsiae():
 
 
 def inference(test_patient):
-    rf = pickle.load(open("model_{}.pickle".format(test_patient), "rb"))
-    features_dict = pickle.load(open("../test_code/Features_Eglass_new_epilepsiae.pickle", "rb"))
+    rf = pickle.load(open("../test_code/model_{}.pickle".format(test_patient), "rb"))
+    features_dict = pickle.load(open("../test_code/Features_Eglass_chb.pickle", "rb"))
 
-    test_files = features_dict.keys()
+    # test_files = features_dict.keys()
+    test_files = [x for x in features_dict.keys() if x.startswith("chb{:02d}".format(test_patient))]
 
     middle_diff = {}
     for pat_file in test_files:
@@ -408,6 +409,7 @@ def inference(test_patient):
                 middle_diff[pat_file]["{}_{}".format(t_duration, attempt)] = (int(np.min(t_diff)))
 
     print(middle_diff)
+    return middle_diff
 
 
 if __name__ == '__main__':
@@ -415,5 +417,10 @@ if __name__ == '__main__':
     # prepare_epilepsiae()
     # classify()
     # classify_epilepsiae()
-    inference(-1)
+    # inference(-1)
     # prepare_pickle_files()
+    middle_diff = {}
+    for pat in range(1,24):
+        middle_diff.update(inference(pat))
+    print(middle_diff)
+
