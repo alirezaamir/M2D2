@@ -41,7 +41,7 @@ def get_FCN_model(state_len=None,
                                              kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4)), name="conv2d_4")(x)
     x = layers.TimeDistributed(layers.Dropout(rate=0.3))(x)
 
-    final_dense = layers.TimeDistributed(layers.Dense(2, activation='softmax',
+    final_dense = layers.TimeDistributed(layers.Dense(1, activation='sigmoid',
                                              kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4)),
                                name="conv2d_5")(x)
 

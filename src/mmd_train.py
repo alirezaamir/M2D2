@@ -71,14 +71,14 @@ def main():
         # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
         early_stopping = EarlyStopping(
-            monitor="loss", patience=8, restore_best_weights=True)
+            monitor="loss", patience=20, restore_best_weights=True)
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
         print("input shape: {}".format(train_data.shape))
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='categorical_crossentropy')
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.SGD(), loss='binary_crossentropy')
 
-        vae_mmd_model.fit(x=train_data, y=tf.keras.utils.to_categorical(train_label,2),
-                          validation_data=(val_data, tf.keras.utils.to_categorical(val_label,2)), batch_size=1, epochs=30,
+        vae_mmd_model.fit(x=train_data, y=train_label,
+                          validation_data=(val_data, val_label), batch_size=1, epochs=100,
                           callbacks=[early_stopping, history])
             # for layer in vae_mmd_model.layers:
             #     print("name : {}".format(layer.name))
@@ -232,6 +232,6 @@ def across_dataset():
 
 if __name__ == "__main__":
     # tf.config.experimental.set_visible_devices([], 'GPU')
-    # main()
+    main()
     # get_results()
     across_dataset()
