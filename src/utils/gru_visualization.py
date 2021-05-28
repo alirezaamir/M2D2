@@ -29,8 +29,8 @@ def get_PCA(X, y, mmd_max, name):
     components = pca.fit_transform(X)
     plt.figure()
     # plt.title(name)
-    plt.xticks(ticks=np.arange(0,11,2), fontsize=8)
-    plt.yticks(ticks=np.arange(-2,9,2), fontsize=8)
+    # plt.xticks(ticks=np.arange(0,11,2), fontsize=8)
+    # plt.yticks(ticks=np.arange(-2,9,2), fontsize=8)
     plt.grid(b=True, which='major', lw=0.2)
     plt.grid(b=True, which='minor', lw=0.1)
     plt.minorticks_on()
@@ -45,7 +45,7 @@ def get_PCA(X, y, mmd_max, name):
     # plt.xlim([-2, 12])
     # plt.ylim([-1, 8])
     print(mmd_max, components[mmd_max, :])
-    plt.savefig('../../output/images/z_{}_proposed.pdf'.format(name), format='pdf')
+    plt.savefig('../../output/images/z_{}_proposed_median_GRU.pdf'.format(name), format='pdf')
 
 
 def get_accuracy(y_predict, y_true):
@@ -88,8 +88,9 @@ def get_within_between(z, y_true):
 def load_model(test_patient):
     arch = 'vae_free'
     # subdirname = "../../temp/vae_mmd/integrated/{}/{}/Anthony_v53".format(1024, arch)
-    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v62".format(1024, arch)
-    subdirname = "../../temp/vae_mmd/integrated/{}/{}/proposed_l16_v70".format(1024, arch)
+    subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v62".format(1024, arch)
+    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/VIL_l2_v73".format(1024, arch)
+    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/proposed_l2_v70".format(1024, arch)
     save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
     trained_model = tf.keras.models.load_model(save_path, compile=False)
     print(trained_model.summary())
@@ -98,7 +99,7 @@ def load_model(test_patient):
                                                    trained_model.output,
                                                    # trained_model.get_layer('dense1').input])
                                                    # trained_model.get_layer('latents').input])
-                                                   trained_model.get_layer('MMD').input])
+                                                   trained_model.get_layer('dense1').input])
     return intermediate_model
 
 
@@ -107,7 +108,7 @@ def predict_(test_patient, model):
     out_list = np.zeros(0)
     true_list = np.zeros(0)
     J_dict = {}
-    for node in sessions.keys():
+    for node in ['pat_109502_142']: #sessions.keys():
         X = sessions[node]['data']
         y_true = sessions[node]['label']
 
@@ -123,16 +124,16 @@ def predict_(test_patient, model):
         X_section = np.concatenate((X_edge, X_section, X_edge), axis=1)
 
         out, z = model.predict(X_section)
-        z = z[0, STATE_LEN:-STATE_LEN, 0, :]
+        z = z[0, STATE_LEN:-STATE_LEN, :]
         Sb, Sw, J = get_within_between(z, y_true)
         # print("Sw: {}, Sb: {}, J: {}".format(Sw, Sb, J))
         J_dict[node] = J
         out = out[0, STATE_LEN:-STATE_LEN, 0]
-        # mmd_argmax = np.argmax(out)
+        mmd_argmax = np.argmax(out)
         # plt.plot(out, 'r')
         out_list = np.concatenate((out_list, out))
         true_list = np.concatenate((true_list, y_true))
-        # get_PCA(z, y_true_section, mmd_argmax, node)
+        get_PCA(z, y_true_section, mmd_argmax, node)
         # for idx in range(9):
         #     subdirname = "../../output/Conv/"
         #     mmd_edge_free = mmd_predicted[0, STATE_LEN:-STATE_LEN, idx]
@@ -283,7 +284,8 @@ def plot_loss():
 
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    # test_pat = 'pat_8902'
+    test_pat = 'pat_109502'
+    # test_pat = 12
     # model = load_model(1)
     # predict_(test_pat, model)
     # auc_list = []
@@ -292,11 +294,11 @@ if __name__ == "__main__":
     # length = []
     J_list = {}
     model = load_model(-1)
-    for test_pat in pat_list:
-        out, true, J = predict_(test_pat, model)
+    # for test_pat in pat_list:
+    out, true, J = predict_(test_pat, model)
     #     out_all = np.concatenate((out_all, out))
     #     true_all = np.concatenate((true_all, true))
-        J_list.update(J)
+    #     J_list.update(J)
     #     # print(auc_list)
     #     # print(length)
     #     # auc_list.append(auc_pat)
@@ -306,6 +308,6 @@ if __name__ == "__main__":
     # plot_roc()
     # print("Total AUC: {}".format(auc_total))
     #
-    print("J : {}".format(J_list))
+    # print("J : {}".format(J_list))
     # plot_AUCs()
     # plot_loss()

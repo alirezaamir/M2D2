@@ -111,12 +111,12 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    source_arch = 'vae_supervised'
+    source_arch = 'vae_unsup_chb'
     test_arch = 'Epilepsiae_un'
     beta = 1e-05
-    latent_dim = 16
+    latent_dim = 128
     lr = 0.0001
-    decay = 0.5
+    decay = 0.02
     gamma = 0.0
 
     root = "../output/vae/{}/".format(source_arch)
@@ -148,10 +148,10 @@ def main():
     z_dict = {}
     # for test_patient in range(1,25):
     J_list = {}
-    for pat_id in range(1,25):
+    for pat_id in pat_list:#range(1,25):
         # test_patient = pat_list[pat_id]
-        source_pat = pat_id
-        sessions = build_dataset_pickle(test_patient=pat_id)
+        source_pat = -1
+        sessions = get_epilepsiae_test(test_patient=pat_id)
         # sessions = (test_patient=test_patient)
 
         # Load the specific weights for the model
