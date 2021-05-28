@@ -32,7 +32,7 @@ EXCLUDED_SIZE = 15
 interval_len = 4
 SEQ_LEN = 900
 STATE_LEN = 899
-EDGE_LEN = 100
+EDGE_LEN = 1
 LATENT_DIM = 32
 
 
@@ -181,7 +181,7 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
 
                 mmd_predicted = vae_mmd_model.predict(X_section)
                 print("Predict : {}".format(mmd_predicted.shape))
-                mmd_edge_free = mmd_predicted[:, EDGE_LEN:-EDGE_LEN, :]
+                mmd_edge_free = mmd_predicted[:, EDGE_LEN:-EDGE_LEN, 1]
                 mmd_maximum = [np.argmax(mmd_edge_free)]
                 start_detected_point = max(np.argmax(mmd_edge_free)-t_duration, 0)
                 start_remove.append(start_detected_point)
@@ -214,7 +214,7 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
 
 def get_results():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v80".format(SEG_LENGTH, arch)
     diffs = {}
     nc = {}
     for pat_id in range(1, 24):
@@ -224,7 +224,7 @@ def get_results():
         diffs.update(diff_pat)
         nc.update(not_detected_pat)
     print("Differences: {}".format(diffs))
-    json.dump(diffs, open("AttemptsResults_proposed.json", "w"))
+    json.dump(diffs, open("AttemptsResults_fcn.json", "w"))
     # print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(list(diffs.values())), np.mean(list(diffs.values()))))
     print("Not detected patients: {}".format(nc))
     # diffs_minute = [x / 15.0 for x in list(diffs.values())]
@@ -235,7 +235,7 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'Anthony_v53'
+    source_model = 'FCN_v80'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
@@ -256,7 +256,7 @@ def across_dataset():
     # print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(list(diffs.values())), np.mean(list(diffs.values()))))
     # print("Not detected patients: {}".format(nc))
     print("Differences: {}".format(diffs))
-    json.dump(diffs, open("AttemptsResults_ccnn_unseen.json", "w"))
+    json.dump(diffs, open("AttemptsResults_fcn_unseen.json", "w"))
     # diffs_minute = [x / 15.0 for x in list(diffs.values())]
     # plt.figure()
     # plt.hist(diffs_minute, bins=150, range=(0, 200))
@@ -264,7 +264,7 @@ def across_dataset():
 
 
 if __name__ == "__main__":
-    tf.config.experimental.set_visible_devices([], 'GPU')
+    # tf.config.experimental.set_visible_devices([], 'GPU')
     # main()
-    # get_results()
-    across_dataset()
+    get_results()
+    # across_dataset()

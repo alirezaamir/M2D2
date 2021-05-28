@@ -8,6 +8,45 @@ from tensorflow.keras import models, layers, losses
 from tensorflow.keras.utils import plot_model
 
 
+def get_FCN_model(state_len=None,
+                  latent_dim=None,
+                  signal_len=None,
+                  seq_len = None,
+                  trainable_vae=True):
+    input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 2))
+    x = input_signal
+    x = layers.TimeDistributed(layers.Conv1D(128, 3, padding="same", activation=None,
+                                             kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4)),
+                               name="conv2d_1")(x)
+    do = layers.TimeDistributed(layers.Dropout(rate=0.1))(x)
+    bn = layers.TimeDistributed(layers.BatchNormalization())(do)
+    relu = layers.TimeDistributed(layers.Activation('relu'))(bn)
+    pool = layers.TimeDistributed(layers.MaxPooling1D(pool_size=4))(relu)
+
+    num_conv_layers = 2
+    for _ in range(num_conv_layers):
+        x = layers.TimeDistributed(layers.Conv1D(128, 3, padding="same", activation=None,
+                                             kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4)),
+                                   name="conv2d_{}".format(_ + 2))(pool)
+        do = layers.TimeDistributed(layers.Dropout(rate=0.1))(x)
+        bn = layers.TimeDistributed(layers.BatchNormalization())(do)
+        relu = layers.TimeDistributed(layers.Activation('relu'))(bn)
+        pool = layers.TimeDistributed(layers.MaxPooling1D(pool_size=4))(relu)
+
+    x = layers.TimeDistributed(layers.Flatten(), name='flatten')(pool)
+    x = layers.TimeDistributed(layers.Dense(100, activation='relu',
+                                             kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4)), name="conv2d_4")(x)
+    x = layers.TimeDistributed(layers.Dropout(rate=0.3))(x)
+
+    final_dense = layers.TimeDistributed(layers.Dense(1, activation='sigmoid',
+                                             kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4)),
+                               name="conv2d_5")(x)
+
+    model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
+    return model
+
+
+
 def build_model(input_shape=None,
                 enc_dimension=None,
                 beta=None,
