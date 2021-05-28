@@ -28,13 +28,13 @@ SEG_LENGTH = 1024
 EXCLUDED_SIZE = 15
 interval_len = 4
 SEQ_LEN = 899
-STATE_LEN = 899
+STATE_LEN = 1
 LATENT_DIM = 32
 
 
 def main():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v62".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v80".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -42,16 +42,16 @@ def main():
     # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
     middle_diff = []
-    all_filenames = get_all_filenames(entire_dataset=True)
+    all_filenames = get_all_filenames(entire_dataset=False)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in [-1]:  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in [24]:  # ["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
         test_patient = str(test_id)
-        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
+        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
         # train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN,
         #                                                   state_len=STATE_LEN)
         # print("Label {}, Max {}".format(train_label.shape, np.max(train_label)))
-        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
+        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
         # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN,
         #                                               state_len=STATE_LEN)
 
@@ -62,23 +62,23 @@ def main():
         #     exit()
         # model.load_weights(load_dirname)
 
-        vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
+        vae_mmd_model = vae_model.get_FCN_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
 
         print(vae_mmd_model.summary())
 
-        conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
-        vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
+        # conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
+        # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
         early_stopping = EarlyStopping(
-            monitor="loss", patience=50, restore_best_weights=True)
+            monitor="loss", patience=8, restore_best_weights=True)
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
         print("input shape: {}".format(train_data.shape))
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='binary_crossentropy')
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='categorical_crossentropy')
 
-        vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=40,
+        vae_mmd_model.fit(x=train_data, y=tf.keras.utils.to_categorical(train_label,2),
+                          validation_data=(val_data, tf.keras.utils.to_categorical(val_label,2)), batch_size=1, epochs=30,
                           callbacks=[early_stopping, history])
             # for layer in vae_mmd_model.layers:
             #     print("name : {}".format(layer.name))
@@ -153,10 +153,12 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
 
             mmd_predicted = vae_mmd_model.predict(X_section)
             print("Predict : {}".format(mmd_predicted.shape))
-            mmd_edge_free = mmd_predicted[:, STATE_LEN:-STATE_LEN, :]
+            mmd_predicted = np.argmax(mmd_predicted, axis=2)
+            print("Predict : {}".format(mmd_predicted.shape))
+            mmd_edge_free = mmd_predicted[:, STATE_LEN:-STATE_LEN]
             mmd_maximum = [np.argmax(mmd_edge_free)]
             name = "{}_{}".format(node, section)
-            plot_mmd(mmd_edge_free[0, :, 0], mmd_maximum, y_true_section, name, subdirname)
+            plot_mmd(mmd_edge_free[0, :], mmd_maximum, y_true_section, name, subdirname)
 
             y_non_zero = np.where(y_true_section > 0, 1, 0)
             y_non_zero = np.concatenate((y_non_zero, [0]))
@@ -186,7 +188,7 @@ def get_results():
     subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(SEG_LENGTH, arch)
     diffs = []
     nc = {}
-    for pat_id in range(1, 24):
+    for pat_id in range(24, 25):
         # pat = pat_list[pat_id]
         pat = pat_id
         diff_pat, not_detected_pat = inference(pat, None, subdirname, dataset='CHB')
@@ -202,7 +204,7 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'z_minus1_v62'
+    source_model = 'FCN_v80'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
@@ -228,7 +230,7 @@ def across_dataset():
 
 
 if __name__ == "__main__":
-    tf.config.experimental.set_visible_devices([], 'GPU')
+    # tf.config.experimental.set_visible_devices([], 'GPU')
     main()
-    # get_results()
-    across_dataset()
+    get_results()
+    # across_dataset()

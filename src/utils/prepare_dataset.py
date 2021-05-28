@@ -62,7 +62,7 @@ def save_pickle(data, dirname, record_name, window_size):
 
 def read_edf_file(record_name, seizure_list):
     print("Record: {}".format(record_name))
-    edf_filename = '../input/chbmit/1.0.0/{}'.format(record_name)
+    edf_filename = '../../input/chbmit/1.0.0/{}'.format(record_name)
     signals, signal_headers, header = pyedflib.highlevel.read_edf(edf_filename)
     T7F7, T8F8 = get_TxFx_channels(signal_headers)
     if T7F7 == 0 and T8F8 == 0:
@@ -84,9 +84,9 @@ def read_edf_file(record_name, seizure_list):
 
 def main():
     # S = MinMaxScaler()
-    seizure_list = json.load(open("../../input/seizures.json"))
+    seizure_list = json.load(open("../../input/24.json"))
     modes = {"train": [], "test": [], "valid": []}
-    with open('../../input/chbmit/1.0.0/RECORDS', 'r') as f:
+    with open('../../input/chbmit/1.0.0/RECORDS24', 'r') as f:
         lines = f.readlines()
         records = lines
 
@@ -99,7 +99,7 @@ def main():
         #     S.partial_fit(eeg_data[:, :-1])
 
     for m in modes:
-        dirname = "../temp/vae_mmd_data/{}/{}/{}".format(SEG_N, "full_normal", m)
+        dirname = "../temp/vae_mmd_data/{}/{}/{}".format(SEG_N, "24", m)
         if not os.path.exists(dirname):
             os.makedirs(dirname)
         for record_name in modes[m]:
@@ -213,7 +213,7 @@ def epilepsiae2pickle(test_patient, root):
 
 
 if __name__ == '__main__':
-    # main()
+    main()
     # epilepsiae_seizures()
-    for pat in pat_list:
-        epilepsiae2pickle(pat, root='../..')
+    # for pat in pat_list:
+    #     epilepsiae2pickle(pat, root='../..')
