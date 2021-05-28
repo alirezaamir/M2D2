@@ -42,9 +42,9 @@ def main():
     # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
     middle_diff = []
-    all_filenames = get_all_filenames(entire_dataset=False)
+    all_filenames = get_all_filenames(entire_dataset=True)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in [24]:  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in [-1]:  # ["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
         test_patient = str(test_id)
         train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
@@ -153,9 +153,10 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
 
             mmd_predicted = vae_mmd_model.predict(X_section)
             print("Predict : {}".format(mmd_predicted.shape))
-            mmd_predicted = np.argmax(mmd_predicted, axis=2)
-            print("Predict : {}".format(mmd_predicted.shape))
-            mmd_edge_free = mmd_predicted[:, STATE_LEN:-STATE_LEN]
+            # mmd_predicted = np.argmax(mmd_predicted, axis=2)
+
+            mmd_edge_free = mmd_predicted[:, STATE_LEN:-STATE_LEN, 1]
+            print("Predict : {}".format(mmd_edge_free.shape))
             mmd_maximum = [np.argmax(mmd_edge_free)]
             name = "{}_{}".format(node, section)
             plot_mmd(mmd_edge_free[0, :], mmd_maximum, y_true_section, name, subdirname)
@@ -185,10 +186,10 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
 
 def get_results():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v80".format(SEG_LENGTH, arch)
     diffs = []
     nc = {}
-    for pat_id in range(24, 25):
+    for pat_id in range(1, 24):
         # pat = pat_list[pat_id]
         pat = pat_id
         diff_pat, not_detected_pat = inference(pat, None, subdirname, dataset='CHB')
@@ -231,6 +232,6 @@ def across_dataset():
 
 if __name__ == "__main__":
     # tf.config.experimental.set_visible_devices([], 'GPU')
-    main()
-    get_results()
-    # across_dataset()
+    # main()
+    # get_results()
+    across_dataset()
