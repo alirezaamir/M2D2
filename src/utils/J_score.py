@@ -1758,7 +1758,7 @@ VAE_128 = {'pat_102_148': 0.00073, 'pat_102_154': 0.00107, 'pat_102_37': 0.00207
            'pat_114902_45': 0.01885, 'pat_114902_22': 0.00241, 'pat_114902_76': 0.00407, 'pat_114902_20': 0.00262,
            'pat_114902_26': 0.00452, 'pat_114902_94': 0.00408}
 
-dict_value = proposed_32
+dict_value = VIB_32
 for k, v in dict_value.items():
     dict_value[k] = round(v, 5)
 
@@ -1771,4 +1771,5 @@ print("J score proposed :{}".format(np.mean(list(dict_value.values()))))
 
 np.argsort(list(dict_value.values()))
 print(np.argsort(list(dict_value.values()))[len(dict_value) // 2])
-print(sorted(dict_value.items(), key=lambda item: item[1]) [len(dict_value)//2+ 1])
+print(sorted(dict_value.items(), key=lambda item: item[1])) #[len(dict_value)//2+ 1])
+print(sorted(dict_value.items(), key=lambda item: item[1]).index(('pat_109502_142', 0.02121)))

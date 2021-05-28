@@ -29,8 +29,8 @@ def get_PCA(X, y, mmd_max, name):
     components = pca.fit_transform(X)
     plt.figure()
     # plt.title(name)
-    # plt.xticks(ticks=np.arange(0,11,2), fontsize=8)
-    # plt.yticks(ticks=np.arange(-2,9,2), fontsize=8)
+    plt.xticks(ticks=np.arange(0,11,2), fontsize=0)
+    plt.yticks(ticks=np.arange(-2,9,2), fontsize=0)
     plt.grid(b=True, which='major', lw=0.2)
     plt.grid(b=True, which='minor', lw=0.1)
     plt.minorticks_on()
@@ -44,8 +44,10 @@ def get_PCA(X, y, mmd_max, name):
     # plt.scatter(components[mmd_max, 0], components[mmd_max, 1], s=80, facecolors='none', edgecolors='r')
     # plt.xlim([-2, 12])
     # plt.ylim([-1, 8])
+    # plt.xticks([])
+    # plt.yticks([])
     print(mmd_max, components[mmd_max, :])
-    plt.savefig('../../output/images/z_{}_proposed_median_GRU.pdf'.format(name), format='pdf')
+    plt.savefig('../../output/images/z_{}_proposed_MMD.pdf'.format(name), format='pdf')
 
 
 def get_accuracy(y_predict, y_true):
@@ -99,7 +101,7 @@ def load_model(test_patient):
                                                    trained_model.output,
                                                    # trained_model.get_layer('dense1').input])
                                                    # trained_model.get_layer('latents').input])
-                                                   trained_model.get_layer('dense1').input])
+                                                   trained_model.get_layer('GRU').input])
     return intermediate_model
 
 
