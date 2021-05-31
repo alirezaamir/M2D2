@@ -145,6 +145,11 @@ manual_epilepsiae = np.dot(
      765, 676, 266, 219, 173, 380, 20, 15, 0, 238, 148, 154, 9, 250, 0, 43, 188, 0, 335, 84, 771, 208, 402, 422,
      541, 477, 269, 233, 5, 40, 548, 23, 107, 178, 225, 419, 785, 0], 4)
 
+FCN = np.dot([0, 0, 0, 0, 0, 0, 0, 91, 13, 0, 0, 0, 0, 0, 0, 0, 1943, 1889, 0, 0, 0, 0, 0, 0, 49, 2299, 121, 2332, 418, 3115, 1939, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2709, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 0, 161, 0, 80, 117, 47, 50, 0, 449, 0, 140, 25, 634, 47, 180, 737, 0, 603, 589, 185, 24, 336, 343, 138, 512, 46, 133, 541, 398, 243, 0, 30, 227, 0, 0, 0, 0, 387, 242, 0, 0, 580, 111, 6, 219, 0, 0, 232, 0, 235, 70, 466, 0, 0, 0, 0, 0, 0, 0, 0, 0, 118, 0, 0, 461, 0, 0, 0, 456, 64, 483]
+    , 4)
+FCN_epilepsiae = np.dot( [24, 313, 81, 589, 0, 4, 587, 13, 0, 137, 0, 0, 36, 138, 170, 195, 294, 446, 0, 157, 0, 51, 264, 717, 165, 0, 0, 0, 130, 0, 0, 0, 10, 411, 358, 292, 330, 636, 258, 117, 62, 199, 119, 9, 181, 0, 106, 131, 348, 406, 631, 373, 8, 81, 202, 337, 0, 331, 22, 41, 0, 19, 735, 6, 624, 0, 538, 0, 0, 502, 228, 63, 33, 133, 822, 135, 344, 438, 468, 94, 0, 0, 0, 7, 0, 638, 0, 0, 708, 0, 0, 0, 447, 0, 76, 590, 20, 64, 23, 89, 3, 2, 304, 142, 491, 588, 0, 636, 282, 0, 14, 462, 18, 443, 0, 427, 0, 15, 0, 548, 312, 0, 0, 0, 0, 547, 0, 0, 334, 223, 12, 0, 664, 112, 148, 224, 682, 336, 147, 26, 61, 185, 0, 0, 0, 0, 16, 669, 0, 0, 0, 0, 0, 0, 52, 0, 2, 70, 5, 302, 0, 0, 0, 0, 0, 742, 510, 0, 0, 506, 698, 0, 98, 5, 14, 55, 382, 363, 598, 7, 0, 280, 605, 8, 240, 106, 21, 24, 545, 0, 0, 101, 681, 0, 0, 0, 212, 39, 114, 0, 28, 30, 268, 0, 35, 6, 0, 516, 0, 0, 0, 0, 305, 285, 695, 0, 27, 198, 0, 332, 401, 109, 0, 0, 504, 29, 121, 3, 199, 265, 436, 17, 419, 0, 0, 9, 253, 347, 0, 0, 89, 0, 222, 109, 724, 597, 0, 0, 0, 0, 0, 84, 0, 0, 110, 0, 0, 527, 0, 305, 0, 0]
+, 4)
+
 
 def plot_box():
     # fig, ax = plt.subplots(figsize=(8, 6))
@@ -166,11 +171,11 @@ def plot_box():
                       markeredgecolor='red')
     medianprops = dict(linewidth=3.5, color='firebrick')
 
-    # all_data = [proposed_epilepsiae, baseline_epilepsiae, manual_epilepsiae, eglass_epilepsiae]
-    all_data = [proposed, baseline, manual, eglass]
-    labels = ['Proposed', 'Baseline VIB', 'Baseline MMD', 'E-Glass']
+    all_data = [proposed_epilepsiae, baseline_epilepsiae, manual_epilepsiae, eglass_epilepsiae, FCN_epilepsiae]
+    # all_data = [proposed, baseline, manual, eglass, FCN]
+    labels = ['Proposed', 'B-VIB', 'B-MMD', 'B-FET', 'B-FCN']
 
-    fig, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(9, 6))
+    fig, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(10, 6))
 
     # rectangular box plot
     bplot1 = ax1.boxplot(all_data,
@@ -196,12 +201,12 @@ def plot_box():
     # ax1.set_title('Notched box plot')
 
     # fill with colors
-    colors = ['pink', 'lightblue', 'lightgreen', 'navajowhite']
+    colors = ['pink', 'lightblue', 'lightgreen', 'navajowhite', 'b']
     for bplot in (bplot1, bplot1):
         for patch, color in zip(bplot['boxes'], colors):
             patch.set_facecolor(color)
     # plt.show()
-    plt.savefig('../../output/images/proposed.pdf', format='pdf')
+    plt.savefig('../../output/images/Unseen.pdf', format='pdf')
 
 
 def time_table():
