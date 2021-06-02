@@ -89,8 +89,10 @@ def get_within_between(z, y_true):
 
 def load_model(test_patient):
     arch = 'vae_free'
+
     # subdirname = "../../temp/vae_mmd/integrated/{}/{}/Anthony_v53".format(1024, arch)
-    subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v62".format(1024, arch)
+    subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(1024, arch)
+    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/iterations_v62".format(1024, arch)
     # subdirname = "../../temp/vae_mmd/integrated/{}/{}/VIL_l2_v73".format(1024, arch)
     # subdirname = "../../temp/vae_mmd/integrated/{}/{}/proposed_l2_v70".format(1024, arch)
     save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
@@ -105,37 +107,71 @@ def load_model(test_patient):
     return intermediate_model
 
 
-def predict_(test_patient, model):
-    sessions = get_epilepsiae_test(test_patient, root='../../')
+def predict_(test_patient):
+    sessions = test_dataset(test_patient, root='../../')
     out_list = np.zeros(0)
     true_list = np.zeros(0)
     J_dict = {}
-    for node in ['pat_109502_142']: #sessions.keys():
+    model = load_model(test_patient)
+    for node in sessions.keys():
         X = sessions[node]['data']
         y_true = sessions[node]['label']
 
         if np.sum(y_true) == 0:
             continue
 
+        minutes = 60
         X_section = X
         length = X.shape[0]
-        y_true_section = y_true
+        y_true_section = y_true #[:256 * minutes * 60]
 
         X_section = np.expand_dims(X_section, 0)
-        X_edge = get_epilepsiae_non_seizure(test_patient, state_len=STATE_LEN, root='../..')
+        X_edge = get_non_seizure_signal(test_patient, state_len=STATE_LEN, root='../..')
         X_section = np.concatenate((X_edge, X_section, X_edge), axis=1)
+
+        X_20min = np.reshape(X, newshape=(-1, 2))# [:256 * minutes * 60]
+        t = np.linspace(0, minutes, X_20min.shape[0])
+
+        plt.figure(figsize=(16,16))
+        plt.subplot(11, 1, 1)
+        plt.title(node)
+        plt.plot(t, 0.35 * (X_20min[:, 0]) + 10, linewidth=0.3, c='dimgray')
+        plt.plot(t, 0.35 * (X_20min[:, 1]) + 20, linewidth=0.3, c='dimgray')
+        plt.ylim([0, 30])
+
+        y_non_zero = np.where(y_true_section > 0, 1, 0)
+        y_diff = np.diff(y_non_zero)
+        start_points = np.where(y_diff > 0)[0]
+        stop_points = np.where(y_diff < 0)[0]
+
+        for seizure_start, seizure_stop in zip(start_points, stop_points):
+            plt.axvspan(t[seizure_start * 1024], t[seizure_stop * 1024], color='r', alpha=0.5)
 
         out, z = model.predict(X_section)
         z = z[0, STATE_LEN:-STATE_LEN, :]
-        Sb, Sw, J = get_within_between(z, y_true)
-        # print("Sw: {}, Sb: {}, J: {}".format(Sw, Sb, J))
-        J_dict[node] = J
         out = out[0, STATE_LEN:-STATE_LEN, 0]
-        mmd_argmax = np.argmax(out)
-        # plt.plot(out, 'r')
-        out_list = np.concatenate((out_list, out))
-        true_list = np.concatenate((true_list, y_true))
-        get_PCA(z, y_true_section, mmd_argmax, node)
+
+        plt.subplot(11,1,2)
+        plt.plot(np.linspace(0, minutes, len(out)), out, c='r')
+
+        for ch in range(9):
+            plt.subplot(11,1, ch+3)
+            plt.plot(np.linspace(0, minutes, len(z)), z[:,ch])
+
+
+
+        # Sb, Sw, J = get_within_between(z, y_true)
+        # # print("Sw: {}, Sb: {}, J: {}".format(Sw, Sb, J))
+        # J_dict[node] = J
+        # out = out[0, STATE_LEN:-STATE_LEN, 0]
+        # mmd_argmax = np.argmax(out)
+        # # plt.plot(out, 'r')
+        # out_list = np.concatenate((out_list, out))
+        # true_list = np.concatenate((true_list, y_true))
+        plt.savefig('../../output/Conv/{}'.format(node))
+        plt.close()
+
+        # get_PCA(z, y_true_section, mmd_argmax, node)
         # for idx in range(9):
         #     subdirname = "../../output/Conv/"
         #     mmd_edge_free = mmd_predicted[0, STATE_LEN:-STATE_LEN, idx]
@@ -286,7 +322,7 @@ def plot_loss():
 
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    test_pat = 'pat_109502'
+    # test_pat = 'pat_109502'
     # test_pat = 12
     # model = load_model(1)
     # predict_(test_pat, model)
@@ -295,9 +331,8 @@ if __name__ == "__main__":
     # true_all = np.zeros(0)
     # length = []
     J_list = {}
-    model = load_model(-1)
-    # for test_pat in pat_list:
-    out, true, J = predict_(test_pat, model)
+    for test_pat in range(1,24):#pat_list:
+        out, true, J = predict_(test_pat)
     #     out_all = np.concatenate((out_all, out))
     #     true_all = np.concatenate((true_all, true))
     #     J_list.update(J)
