@@ -8,6 +8,38 @@ from tensorflow.keras import models, layers, losses
 from tensorflow.keras.utils import plot_model
 
 
+def get_FCN_model(state_len=None,
+                  latent_dim=None,
+                  signal_len=None,
+                  seq_len = None,
+                  trainable_vae=True):
+    input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 2))
+    x = input_signal
+    x = layers.TimeDistributed(layers.Conv1D(128, 3, padding="same", activation=None),
+                               name="conv2d_1")(x)
+    bn = layers.TimeDistributed(layers.BatchNormalization())(x)
+    relu = layers.TimeDistributed(layers.Activation('relu'))(bn)
+    pool = layers.TimeDistributed(layers.MaxPooling1D(pool_size=4))(relu)
+
+    num_conv_layers = 2
+    for _ in range(num_conv_layers):
+        x = layers.TimeDistributed(layers.Conv1D(128, 3, padding="same", activation=None),
+                                   name="conv2d_{}".format(_ + 2))(pool)
+        bn = layers.TimeDistributed(layers.BatchNormalization())(x)
+        relu = layers.TimeDistributed(layers.Activation('relu'))(bn)
+        pool = layers.TimeDistributed(layers.MaxPooling1D(pool_size=4))(relu)
+
+    x = layers.TimeDistributed(layers.Flatten(), name='flatten')(pool)
+    x = layers.TimeDistributed(layers.Dense(100, activation='relu'), name="conv2d_4")(x)
+
+    final_dense = layers.TimeDistributed(layers.Dense(1, activation='sigmoid'),
+                               name="conv2d_5")(x)
+
+    model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
+    return model
+
+
+
 def build_VAE_model(input_shape=None,
                     enc_dimension=None,
                     beta=None,
@@ -166,4 +198,5 @@ def MMD_free_sampling(args):
     epsilon = K.random_normal(shape=(batch, seq, dim))
     z = z_mean + K.exp(0.5 * z_log_var) * epsilon
     return z
+
 

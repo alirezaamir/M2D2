@@ -279,9 +279,14 @@ def plot_loss():
            0.050786473, 0.05676218, 0.06318102, 0.06781284, 0.056076918, 0.069646314, 0.06519431, 0.0696569,
            0.058675777, 0.07144404, 0.0555296]
 
+    FCN =  [0.119505845, 0.09834997, 0.09615293, 0.088713326, 0.09384103, 0.09385703, 0.106920645, 0.08896588, 0.09180134, 0.0945192, 0.14843622, 0.09065144, 0.09665076, 0.08966792, 0.092460364, 0.088963084, 0.08728783, 0.09034931, 0.08800865, 0.09154548, 0.09752058, 0.10207616, 0.09125352, 0.091078825, 0.08521181, 0.09013768, 0.23399831, 0.08619424, 0.08518354, 0.08980149, 0.09722837, 0.11088059, 0.08891289, 0.11300562, 0.09264217, 0.099358216, 0.098957844, 0.106244296, 0.10282649, 0.09231718, 0.095750906, 0.082071215, 0.10883931, 0.10415596, 0.08778384, 0.083624706, 0.14514196, 0.09612, 0.084281154, 0.12121448]
+    val_FCN =[0.08886107, 0.057776425, 0.052870072, 0.04875787, 0.057460774, 0.057486564, 0.07689604, 0.04883129, 0.057316616, 0.06261298, 0.14314078, 0.053695142, 0.064450204, 0.05143364, 0.04965878, 0.048540402, 0.049075007, 0.057848755, 0.048638593, 0.061168633, 0.06938633, 0.07655414, 0.04983216, 0.059545897, 0.04781665, 0.05858285, 0.24310377, 0.045595035, 0.0484465, 0.0579052, 0.069578096, 0.09147693, 0.048526272, 0.093833916, 0.06586184, 0.0746171, 0.07800943, 0.08807994, 0.07864638, 0.06418447, 0.0708784, 0.045552958, 0.09165244, 0.08005118, 0.049596485, 0.051931478, 0.13914995, 0.07529602, 0.050295595, 0.11109458]
+
+
     k_ascending = 10
     proposed_i = len(val_prop)
     base_i = len(val_base)
+    fcn_i = len(val_FCN)
     for i in range(len(val_prop) - k_ascending):
         filtered = gaussian_filter1d(val_prop[:i+k_ascending], sigma=5)
         if list(filtered[i:i+k_ascending]) == list(sorted(filtered[i:i+k_ascending])):
@@ -294,22 +299,34 @@ def plot_loss():
             print("i: {}".format(i))
             base_i = i+k_ascending
             break
+    for i in range(len(val_FCN)- k_ascending):
+        filtered = gaussian_filter1d(val_FCN[:i + k_ascending], sigma=5)
+        if list(filtered[i:i + k_ascending]) == list(sorted(filtered[i:i + k_ascending])):
+            print("i: {}".format(i))
+            fcn_i = i+k_ascending
+            break
 
     plt.figure(figsize=(12, 6))
 
-    plt.plot(gaussian_filter1d(train_prop, sigma=8)[:proposed_i+1], 'r', label='Proposed Training')
+    plt.plot(gaussian_filter1d(train_prop, sigma=8)[:proposed_i+1], label='Proposed Training')
     plt.plot(proposed_i, gaussian_filter1d(train_prop, sigma=8)[proposed_i], '*k')
     # plt.plot(train_prop, '--r')
 
-    plt.plot(gaussian_filter1d(val_prop, sigma=8)[:proposed_i+1], 'g', label='Proposed Validation')
+    plt.plot(gaussian_filter1d(val_prop, sigma=8)[:proposed_i+1], label='Proposed Validation')
     plt.plot(proposed_i, gaussian_filter1d(val_prop, sigma=8)[proposed_i], '*k')
     # plt.plot(val_prop, '--g')
 
-    plt.plot(gaussian_filter1d(train_base, sigma=8)[:base_i+1], 'b', label='C-CNN Training')
+    plt.plot(gaussian_filter1d(train_base, sigma=8)[:base_i+1], label='C-CNN Training')
     # plt.plot(train_base, '--b')
 
-    plt.plot(gaussian_filter1d(val_base, sigma=8)[:base_i+1], 'c', label='C-CNN Validation')
+    plt.plot(gaussian_filter1d(val_base, sigma=8)[:base_i+1], label='C-CNN Validation')
     # plt.plot(val_base, '--c')
+
+    plt.plot(gaussian_filter1d(FCN, sigma=8), label='FCN Training')
+    # plt.plot(train_base, '--b')
+
+    plt.plot(gaussian_filter1d(val_FCN, sigma=8), label='FCN Validation')
+
     plt.legend(fontsize=12)
     plt.xlim([0,base_i])
     plt.xlabel('Epochs', fontsize=16)
@@ -330,9 +347,9 @@ if __name__ == "__main__":
     # out_all = np.zeros(0)
     # true_all = np.zeros(0)
     # length = []
-    J_list = {}
-    for test_pat in range(1,24):#pat_list:
-        out, true, J = predict_(test_pat)
+    # J_list = {}
+    # for test_pat in range(1,24):#pat_list:
+    #     out, true, J = predict_(test_pat)
     #     out_all = np.concatenate((out_all, out))
     #     true_all = np.concatenate((true_all, true))
     #     J_list.update(J)
@@ -347,4 +364,4 @@ if __name__ == "__main__":
     #
     # print("J : {}".format(J_list))
     # plot_AUCs()
-    # plot_loss()
+    plot_loss()
