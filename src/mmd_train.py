@@ -43,6 +43,14 @@ def train_model():
         test_patient = str(test_id)
         train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
         val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+        print("Shape :{}".format(train_data.shape))
+        print("Shape :{}".format(train_label.shape))
+
+        train_data = np.reshape(train_data, newshape=(-1, 1024, 2))
+        train_label = np.reshape(train_label, newshape=(-1, 1))
+        val_data = np.reshape(val_data, newshape=(-1, 1024, 2))
+        val_label = np.reshape(val_label, newshape=(-1, 1))
+
 
         # load the model
         vae_mmd_model = vae_model.get_FCN_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
@@ -56,7 +64,7 @@ def train_model():
 
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(), loss='binary_crossentropy')
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.SGD(), loss='binary_crossentropy')
 
         BCE = tf.keras.losses.BinaryCrossentropy()
         bce_train = []
@@ -66,14 +74,14 @@ def train_model():
         if not os.path.exists(savedir):
             os.makedirs(savedir)
 
-        for iter in range(50):
+        for iter in range(100):
             # vae_mmd_model.save(savedir)
-            vae_mmd_model.fit(x=train_data, y=train_label, batch_size=1, epochs=1, verbose=2)
+            vae_mmd_model.fit(x=train_data, y=train_label, batch_size=32, epochs=1, verbose=2)
 
-            predict = vae_mmd_model.predict(x=train_data, batch_size=1)
+            predict = vae_mmd_model.predict(x=train_data, batch_size=32)
             LOG.info("BCE TRN epoch {} = {}".format(iter, BCE(y_pred=predict, y_true=train_label)))
             bce_train.append( BCE(y_pred=predict, y_true=train_label))
-            predict = vae_mmd_model.predict(x=val_data, batch_size=1)
+            predict = vae_mmd_model.predict(x=val_data, batch_size=32)
             LOG.info("BCE VAL epoch {} = {}".format(iter, BCE(y_pred=predict, y_true=val_label)))
             bce_val.append(BCE(y_pred=predict, y_true=val_label))
 
@@ -167,7 +175,7 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'ccnn_v62'
+    source_model = 'no_mmd_v63'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
@@ -192,6 +200,6 @@ def across_dataset():
 
 if __name__ == "__main__":
     # tf.config.experimental.set_visible_devices([], 'GPU')
-    train_model()
+    # train_model()
     # get_results()
     across_dataset()

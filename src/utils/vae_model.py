@@ -13,31 +13,34 @@ def get_FCN_model(state_len=None,
                   signal_len=None,
                   seq_len = None,
                   trainable_vae=True):
-    input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 2))
+    input_signal = tf.keras.layers.Input(shape=(signal_len, 2))
     x = input_signal
-    x = layers.TimeDistributed(layers.Conv1D(128, 3, padding="same", activation=None),
-                               name="conv2d_1")(x)
-    bn = layers.TimeDistributed(layers.BatchNormalization())(x)
-    relu = layers.TimeDistributed(layers.Activation('relu'))(bn)
-    pool = layers.TimeDistributed(layers.MaxPooling1D(pool_size=4))(relu)
+    x = layers.Conv1D(128, 3, padding="same", activation=None,
+                                             kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4))(x)
+    do = layers.Dropout(rate=0.1)(x)
+    bn = layers.BatchNormalization()(do)
+    relu = layers.Activation('relu')(bn)
+    pool = layers.MaxPooling1D(pool_size=4)(relu)
 
     num_conv_layers = 2
     for _ in range(num_conv_layers):
-        x = layers.TimeDistributed(layers.Conv1D(128, 3, padding="same", activation=None),
-                                   name="conv2d_{}".format(_ + 2))(pool)
-        bn = layers.TimeDistributed(layers.BatchNormalization())(x)
-        relu = layers.TimeDistributed(layers.Activation('relu'))(bn)
-        pool = layers.TimeDistributed(layers.MaxPooling1D(pool_size=4))(relu)
+        x = layers.Conv1D(128, 3, padding="same", activation=None,
+                                             kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4))(pool)
+        do = layers.Dropout(rate=0.1)(x)
+        bn = layers.BatchNormalization()(do)
+        relu = layers.Activation('relu')(bn)
+        pool = layers.MaxPooling1D(pool_size=4)(relu)
 
-    x = layers.TimeDistributed(layers.Flatten(), name='flatten')(pool)
-    x = layers.TimeDistributed(layers.Dense(100, activation='relu'), name="conv2d_4")(x)
+    x = layers.Flatten()(pool)
+    x = layers.Dense(100, activation='relu',
+                                             kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4))(x)
+    x = layers.Dropout(rate=0.3)(x)
 
-    final_dense = layers.TimeDistributed(layers.Dense(1, activation='sigmoid'),
-                               name="conv2d_5")(x)
+    final_dense = layers.Dense(1, activation='sigmoid',
+                                             kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4))(x)
 
     model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
     return model
-
 
 
 def build_VAE_model(input_shape=None,
