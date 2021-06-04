@@ -87,14 +87,14 @@ def get_within_between(z, y_true):
     return S_b, S_w, S_b / S_w
 
 
-def load_model(test_patient):
+def load_model(test_patient, latent, num):
     arch = 'vae_free'
 
     # subdirname = "../../temp/vae_mmd/integrated/{}/{}/Anthony_v53".format(1024, arch)
-    subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(1024, arch)
+    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v62".format(1024, arch)
     # subdirname = "../../temp/vae_mmd/integrated/{}/{}/iterations_v62".format(1024, arch)
     # subdirname = "../../temp/vae_mmd/integrated/{}/{}/VIL_l2_v73".format(1024, arch)
-    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/proposed_l2_v70".format(1024, arch)
+    subdirname = "../../temp/vae_mmd/integrated/{}/{}/proposed_l{}_n{}_v62".format(1024, arch, latent, num)
     save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
     trained_model = tf.keras.models.load_model(save_path, compile=False)
     print(trained_model.summary())
@@ -103,73 +103,77 @@ def load_model(test_patient):
                                                    trained_model.output,
                                                    # trained_model.get_layer('dense1').input])
                                                    # trained_model.get_layer('latents').input])
-                                                   trained_model.get_layer('GRU').input])
+                                                   trained_model.get_layer('MMD').input])
     return intermediate_model
 
 
-def predict_(test_patient):
-    sessions = test_dataset(test_patient, root='../../')
+def predict_(test_patient, model):
+    sessions = get_epilepsiae_test(test_patient, root='../../')
     out_list = np.zeros(0)
     true_list = np.zeros(0)
     J_dict = {}
-    model = load_model(test_patient)
+
     for node in sessions.keys():
         X = sessions[node]['data']
         y_true = sessions[node]['label']
 
         if np.sum(y_true) == 0:
             continue
-
         minutes = 60
         X_section = X
         length = X.shape[0]
         y_true_section = y_true #[:256 * minutes * 60]
 
         X_section = np.expand_dims(X_section, 0)
-        X_edge = get_non_seizure_signal(test_patient, state_len=STATE_LEN, root='../..')
+        X_edge = get_epilepsiae_non_seizure(test_patient, state_len=STATE_LEN, root='../..')
         X_section = np.concatenate((X_edge, X_section, X_edge), axis=1)
 
         X_20min = np.reshape(X, newshape=(-1, 2))# [:256 * minutes * 60]
         t = np.linspace(0, minutes, X_20min.shape[0])
 
-        plt.figure(figsize=(16,16))
-        plt.subplot(11, 1, 1)
-        plt.title(node)
-        plt.plot(t, 0.35 * (X_20min[:, 0]) + 10, linewidth=0.3, c='dimgray')
-        plt.plot(t, 0.35 * (X_20min[:, 1]) + 20, linewidth=0.3, c='dimgray')
-        plt.ylim([0, 30])
-
-        y_non_zero = np.where(y_true_section > 0, 1, 0)
-        y_diff = np.diff(y_non_zero)
-        start_points = np.where(y_diff > 0)[0]
-        stop_points = np.where(y_diff < 0)[0]
-
-        for seizure_start, seizure_stop in zip(start_points, stop_points):
-            plt.axvspan(t[seizure_start * 1024], t[seizure_stop * 1024], color='r', alpha=0.5)
-
         out, z = model.predict(X_section)
-        z = z[0, STATE_LEN:-STATE_LEN, :]
+        z = z[0, STATE_LEN:-STATE_LEN, 0, :]
         out = out[0, STATE_LEN:-STATE_LEN, 0]
 
-        plt.subplot(11,1,2)
-        plt.plot(np.linspace(0, minutes, len(out)), out, c='r')
+        # plt.figure(figsize=(15,6))
+        # plt.plot(t, 0.35 * (X_20min[:, 0]) + 12, linewidth=0.3, c='dimgray')
+        # plt.plot(t, 0.35 * (X_20min[:, 1]) + 22, linewidth=0.3, c='dimgray')
+        #
+        # y_non_zero = np.where(y_true_section > 0, 1, 0)
+        # y_diff = np.diff(y_non_zero)
+        # start_points = np.where(y_diff > 0)[0]
+        # stop_points = np.where(y_diff < 0)[0]
+        #
+        # for seizure_start, seizure_stop in zip(start_points, stop_points):
+        #     print("{} : {} -> {}".format(node, seizure_start, seizure_stop))
+        #     plt.axvspan(t[seizure_start * 1024], t[seizure_stop * 1024], color='r', alpha=0.5)
+        #
+        # t_out = np.linspace(0, minutes, minutes * 15-1)
+        # min_max = lambda a: (a-np.min(a))/(np.max(a) - np.min(a))
+        # plt.plot(t_out, min_max(out) * 8 + 30, c='k', marker='o', markersize=1.2)
+        # plt.plot(t_out, min_max(z[:,1]) * 8 + 40, c='b', marker='o', markersize=1.2)
+        # plt.plot(t_out, min_max(z[:,-1]) * 8 + 50, c='b', marker='o', markersize=1.2)
+        #
+        # plt.grid(b=True, c='r', which='major', lw=0.5, axis='x')
+        # plt.grid(b=True, c='r', which='major', lw=0.2, axis='y')
+        # plt.grid(b=True, c='r', which='minor', lw=0.2)
+        # plt.xlim([0, minutes])
+        # plt.yticks(ticks=[12, 22, 34, 44, 46, 54, 56],
+        #            labels=['F8-T8', 'F7-T7', 'Model Output', 'Short Window', 'MMD Output', 'Long Window', 'MMD Output'], fontsize=12)
+        # plt.ylim([4, 60])
+        # plt.minorticks_on()
+        # plt.xlabel('Time (min)', fontsize=14)
+        # plt.savefig('../../output/Conv/a_{}.pdf'.format(node), format='pdf')
+        # plt.close()
 
-        for ch in range(9):
-            plt.subplot(11,1, ch+3)
-            plt.plot(np.linspace(0, minutes, len(z)), z[:,ch])
-
-
-
-        # Sb, Sw, J = get_within_between(z, y_true)
-        # # print("Sw: {}, Sb: {}, J: {}".format(Sw, Sb, J))
-        # J_dict[node] = J
+        Sb, Sw, J = get_within_between(z, y_true)
+        # print("Sw: {}, Sb: {}, J: {}".format(Sw, Sb, J))
+        J_dict[node] = J
         # out = out[0, STATE_LEN:-STATE_LEN, 0]
         # mmd_argmax = np.argmax(out)
         # # plt.plot(out, 'r')
         # out_list = np.concatenate((out_list, out))
         # true_list = np.concatenate((true_list, y_true))
-        plt.savefig('../../output/Conv/{}'.format(node))
-        plt.close()
 
         # get_PCA(z, y_true_section, mmd_argmax, node)
         # for idx in range(9):
@@ -341,22 +345,54 @@ def plot_loss():
     plt.savefig('../../output/images/loss.pdf', format='pdf')
 
 
+def plot_J():
+    latent_J = {
+    2: [0.004281042060840771, 0.033740811560626194, 0.08246471998780844, 0.06037224722306017, 0.005689322017810629,
+        0.03484840996834265, 0.0897],
+
+    4: [0.04821869008271693, 0.09657076782506689, 0.06926981888973287, 0.07451310474892826, 0.00489191421393177,
+        0.06858844520592158, 0.0862],
+
+    8: [0.05481527570212501, 0.05680726796543271, 0.04401868359314164, 0.11390296117371736, 0.10349995057139855,
+        0.1266658060513689, 0.1128],
+
+    16: [0.06442773615114497, 0.04203966829387257, 0.05178621019905252, 0.09671345863838918, 0.1113],
+
+    32: [0.13601462723732363, 0.06937238667631922, 0.12178700377106827, 0.0693, 0.1220, 0.133],
+
+    64: [0.10151381929108491, 0.03220318456011666, 0.017613296214499707, 0.09066382353022744, 0.0655],
+
+    128: [0.13774325750116578, 0.041687898486187265, 0.04393620828208955, 0.04455468168306081, 0.017],
+
+    256: [0.12090451090909968, 0.10430905223608396, 0.1717613195843174, 0]}
+
+    latent_dim = [2, 4, 8, 16, 32, 64, 128]
+    x_pos = np.arange(len(latent_dim))
+    CTEs = [np.mean(latent_J[l]) for l in latent_dim]
+    error = [np.std(latent_J[l]) for l in latent_dim]
+    plt.figure(figsize=())
+    plt.xticks(ticks=x_pos, labels=latent_dim, fontsize=12)
+    plt.bar(x=x_pos, height=CTEs, yerr=error)
+    plt.xlabel('Z dimension', fontsize=14)
+    plt.ylabel('J-score', fontsize=14)
+
+    plt.savefig('../../output/images/j_l.pdf', format='pdf')
+
+
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    test_pat = 'pat_109502'
+    # test_pat = 'pat_102'
     # test_pat = 12
-    # model = load_model(1)
+
     # predict_(test_pat, model)
     # auc_list = []
     # out_all = np.zeros(0)
     # true_all = np.zeros(0)
     # length = []
-    J_list = {}
-    # for test_pat in pat_list:
-    out, true, J = predict_(test_pat)
+
     #     out_all = np.concatenate((out_all, out))
     #     true_all = np.concatenate((true_all, true))
-    #     J_list.update(J)
+
     #     # print(auc_list)
     #     # print(length)
     #     # auc_list.append(auc_pat)
@@ -366,6 +402,20 @@ if __name__ == "__main__":
     # plot_roc()
     # print("Total AUC: {}".format(auc_total))
     #
-    # print("J : {}".format(J_list))
     # plot_AUCs()
     # plot_loss()
+    # J_l_num = []
+    # for l in [4, 8, 16, 32, 64]:
+    #     max_num = 6 if l < 10 else 4
+    #     for num in range(max_num):
+    #         model = load_model(-1, l, num)
+    #         J_list = {}
+    #         for test_pat in pat_list:
+    #             out, true, J = predict_(test_pat, model)
+    #             J_list.update(J)
+    #         print("Latent : {}\nJ : {}".format(l, J_list))
+    #         J_mean = np.mean(list(J_list.values()))
+    #         J_l_num.append(J_mean)
+    # print(J_l_num)
+
+    plot_J()
