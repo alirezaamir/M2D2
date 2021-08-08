@@ -22,7 +22,7 @@ LOG.setLevel(logging.INFO)
 SF = 256
 SEG_LENGTH = 1024
 EXCLUDED_SIZE = 15
-interval_len = 8
+interval_len = 6
 
 
 def get_interval_mmd(K_mat):
@@ -41,6 +41,22 @@ def get_interval_mmd(K_mat):
             ((1 / float(M * M)) * Kyy) -
             ((2 / float(N * M)) * Kxy)
         ))
+    return np.array(mmd)
+
+
+def get_simplified_mmd(K_mat):
+    mmd = []
+    N = 2 * interval_len
+    input_length = K_mat.shape[0]
+    for index in range(interval_len, input_length - interval_len):
+        M = input_length - N
+        start = index - interval_len
+        end = index + interval_len
+        Kxx = K_mat[start: end, start: end].sum()
+        Kxy = K_mat[start:end, :].sum()
+        mmd.append(
+            ((1 / float(N * N)) * Kxx) -
+            ((2 / float(N * M)) * Kxy))
     return np.array(mmd)
 
 
@@ -102,7 +118,7 @@ def plot_mmd(mmd, argmax_mmd, y_true, name, dir):
     plt.xlabel("Time (second)")
     plt.ylabel("MMD")
     plt.title("Seizure detection for patient {}".format(name))
-    plt.savefig("{}/{}_norm.png".format(dir, name))
+    plt.savefig("{}/{}.png".format(dir, name))
     plt.close()
 
 

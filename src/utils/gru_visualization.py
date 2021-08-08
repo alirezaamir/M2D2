@@ -47,7 +47,7 @@ def get_PCA(X, y, mmd_max, name):
     # plt.xticks([])
     # plt.yticks([])
     print(mmd_max, components[mmd_max, :])
-    plt.savefig('../../output/images/z_{}_proposed_MMD.pdf'.format(name), format='pdf')
+    plt.savefig('../../output/images/z_{}_revision_MMD.pdf'.format(name), format='pdf')
 
 
 def get_accuracy(y_predict, y_true):
@@ -91,10 +91,10 @@ def load_model(test_patient, latent, num):
     arch = 'vae_free'
 
     # subdirname = "../../temp/vae_mmd/integrated/{}/{}/Anthony_v53".format(1024, arch)
-    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v62".format(1024, arch)
+    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v72".format(1024, arch)
     # subdirname = "../../temp/vae_mmd/integrated/{}/{}/iterations_v62".format(1024, arch)
-    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/VIL_l2_v73".format(1024, arch)
-    subdirname = "../../temp/vae_mmd/integrated/{}/{}/proposed_l{}_n{}_v62".format(1024, arch, latent, num)
+    subdirname = "../../temp/vae_mmd/integrated/{}/{}/proposed_l32_v70".format(1024, arch)
+    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/proposed_l{}_n{}_v62".format(1024, arch, 32, 3)
     save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
     trained_model = tf.keras.models.load_model(save_path, compile=False)
     print(trained_model.summary())
@@ -103,7 +103,7 @@ def load_model(test_patient, latent, num):
                                                    trained_model.output,
                                                    # trained_model.get_layer('dense1').input])
                                                    # trained_model.get_layer('latents').input])
-                                                   trained_model.get_layer('MMD').input])
+                                                   trained_model.get_layer('conv_interval').output])
     return intermediate_model
 
 
@@ -113,7 +113,7 @@ def predict_(test_patient, model):
     true_list = np.zeros(0)
     J_dict = {}
 
-    for node in sessions.keys():
+    for node in ['pat_109502_142']:#sessions.keys():
         X = sessions[node]['data']
         y_true = sessions[node]['label']
 
@@ -132,7 +132,7 @@ def predict_(test_patient, model):
         t = np.linspace(0, minutes, X_20min.shape[0])
 
         out, z = model.predict(X_section)
-        z = z[0, STATE_LEN:-STATE_LEN, 0, :]
+        z = z[0, STATE_LEN:-STATE_LEN, :]
         out = out[0, STATE_LEN:-STATE_LEN, 0]
 
         # plt.figure(figsize=(15,6))
@@ -167,15 +167,15 @@ def predict_(test_patient, model):
         # plt.close()
 
         Sb, Sw, J = get_within_between(z, y_true)
-        # print("Sw: {}, Sb: {}, J: {}".format(Sw, Sb, J))
+        print("{}, Sw: {}, Sb: {}, J: {}".format(node, Sw, Sb, J))
         J_dict[node] = J
-        # out = out[0, STATE_LEN:-STATE_LEN, 0]
+        # out = out[0, STATE_LEN:-STATE_LEN]
         # mmd_argmax = np.argmax(out)
         # # plt.plot(out, 'r')
         # out_list = np.concatenate((out_list, out))
         # true_list = np.concatenate((true_list, y_true))
 
-        # get_PCA(z, y_true_section, mmd_argmax, node)
+        get_PCA(z, y_true_section, 0, node)
         # for idx in range(9):
         #     subdirname = "../../output/Conv/"
         #     mmd_edge_free = mmd_predicted[0, STATE_LEN:-STATE_LEN, idx]
@@ -381,10 +381,10 @@ def plot_J():
 
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    # test_pat = 'pat_102'
+    test_pat = 'pat_109502'
     # test_pat = 12
-
-    # predict_(test_pat, model)
+    model = load_model(-1, 0, 0)
+    predict_(test_pat, model)
     # auc_list = []
     # out_all = np.zeros(0)
     # true_all = np.zeros(0)
@@ -418,4 +418,4 @@ if __name__ == "__main__":
     #         J_l_num.append(J_mean)
     # print(J_l_num)
 
-    plot_J()
+    # plot_J()
