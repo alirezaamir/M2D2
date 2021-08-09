@@ -34,7 +34,7 @@ LATENT_DIM = 32
 
 def main():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v80".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_BFCN_v80".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -42,18 +42,18 @@ def main():
     # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
     middle_diff = []
-    all_filenames = get_all_filenames(entire_dataset=True)
+    # all_filenames = get_all_filenames(entire_dataset=True)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in [-1]:  # ["-1"]:  # range(30):  # range(1,24):
-        # test_patient = pat_list[test_id]
-        test_patient = str(test_id)
-        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
-        # train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN,
-        #                                                   state_len=STATE_LEN)
-        # print("Label {}, Max {}".format(train_label.shape, np.max(train_label)))
-        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
-        # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN,
-        #                                               state_len=STATE_LEN)
+    for test_id in range(30):  # ["-1"]:  # range(30):  # range(1,24):
+        test_patient = pat_list[test_id]
+        # test_patient = str(test_id)
+        # train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+        train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN,
+                                                          state_len=None)
+        print("Label {}, Max {}".format(train_label.shape, np.max(train_label)))
+        # val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+        val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN,
+                                                      state_len=None)
 
         # Load the specific weights for the model
         # load_dirname = root + stub.format(SEG_LENGTH, beta, LATENT_DIM, lr, decay, gamma, test_patient)
@@ -71,14 +71,14 @@ def main():
         # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
         early_stopping = EarlyStopping(
-            monitor="loss", patience=20, restore_best_weights=True)
+            monitor="loss", patience=10, restore_best_weights=True)
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
         print("input shape: {}".format(train_data.shape))
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.SGD(), loss='binary_crossentropy')
 
         vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=100,
+                          validation_data=(val_data, val_label), batch_size=1, epochs=25,
                           callbacks=[early_stopping, history])
             # for layer in vae_mmd_model.layers:
             #     print("name : {}".format(layer.name))
@@ -90,8 +90,8 @@ def main():
             os.makedirs(savedir)
         vae_mmd_model.save(savedir)
 
-    #     diffs, _ = inference(int(test_patient), trained_model=vae_mmd_model, subdirname=subdirname, dataset='CHB')
-    #     middle_diff += diffs
+        diffs, _ = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname, dataset='Epilepsiae')
+        middle_diff += diffs
     #
     # print(middle_diff)
     # plt.figure()
@@ -155,7 +155,7 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
             print("Predict : {}".format(mmd_predicted.shape))
             # mmd_predicted = np.argmax(mmd_predicted, axis=2)
 
-            mmd_edge_free = mmd_predicted[:, STATE_LEN:-STATE_LEN, 1]
+            mmd_edge_free = mmd_predicted[:, STATE_LEN:-STATE_LEN, 0]
             print("Predict : {}".format(mmd_edge_free.shape))
             mmd_maximum = [np.argmax(mmd_edge_free)]
             name = "{}_{}".format(node, section)
@@ -186,13 +186,13 @@ def inference(test_patient, trained_model, subdirname, dataset='CHB'):
 
 def get_results():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v80".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_BFCN_v80".format(SEG_LENGTH, arch)
     diffs = []
     nc = {}
-    for pat_id in range(1, 24):
-        # pat = pat_list[pat_id]
-        pat = pat_id
-        diff_pat, not_detected_pat = inference(pat, None, subdirname, dataset='CHB')
+    for pat_id in range(30):
+        pat = pat_list[pat_id]
+        # pat = pat_id
+        diff_pat, not_detected_pat = inference(pat, None, subdirname, dataset='Epilepsiae')
         diffs += diff_pat
         nc.update(not_detected_pat)
     print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
@@ -232,6 +232,6 @@ def across_dataset():
 
 if __name__ == "__main__":
     # tf.config.experimental.set_visible_devices([], 'GPU')
-    main()
-    # get_results()
-    across_dataset()
+    # main()
+    get_results()
+    # across_dataset()
