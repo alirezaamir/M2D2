@@ -76,25 +76,25 @@ def train_model():
         savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
         if not os.path.exists(savedir):
             os.makedirs(savedir)
-        for iter in range(10):
+        for iter in range(6):
             non_seizure_index = np.where(train_label == 0)[0]
             seizure_index = np.where(train_label != 0)[0]
             seizure_count = seizure_index.shape[0]
 
             non_seizure_index = np.random.permutation(non_seizure_index)
-            non_seizure_index_balanced = non_seizure_index[:seizure_count]
+            non_seizure_index_balanced = non_seizure_index[:6*seizure_count]
             train_data_balanced = np.concatenate((train_data[seizure_index], train_data[non_seizure_index_balanced]))
-            train_label_balanced = np.concatenate((np.ones(seizure_count), np.zeros(seizure_count)))
+            train_label_balanced = np.concatenate((np.ones(seizure_count), np.zeros(6*seizure_count)))
 
-            idx = np.random.permutation(2 * seizure_count)
-            train_data_balanced = train_data_balanced[idx]
-            train_label_balanced = train_label_balanced[idx]
+            # idx = np.random.permutation(max(6 * seizure_count, non_seizure_index))
+            # train_data_balanced = train_data_balanced[idx]
+            # train_label_balanced = train_label_balanced[idx]
 
             vae_mmd_model.fit(x=train_data_balanced, y=train_label_balanced, validation_data=[val_data, val_label],
-                              batch_size=32, epochs=10, verbose=2)
+                              batch_size=32, epochs=8, verbose=1, shuffle=True)
 
-        # diffs = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname, dataset='Epilepsiae')
-        # middle_diff += diffs
+        diffs = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname, dataset='Epilepsiae', FCN_model=True)
+        middle_diff += diffs
         vae_mmd_model.save(savedir)
     # plt.figure()
     # plt.hist(middle_diff)
@@ -210,7 +210,7 @@ def across_dataset():
 
 
 if __name__ == "__main__":
-    tf.config.experimental.set_visible_devices([], 'GPU')
-    # train_model()
-    get_results()
+    # tf.config.experimental.set_visible_devices([], 'GPU')
+    train_model()
+    # get_results()
     # across_dataset()
