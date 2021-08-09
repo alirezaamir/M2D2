@@ -159,16 +159,19 @@ def get_epilepsiae_seizures(mode, test_patient, dirname, max_len=899, state_len 
                         continue
                     x_selected = x[start:end, :, :]
                     y_selected = y[start:end, :]
+            if state_len is None:
+                X_total.append(x_selected)
+                y_total.append(y_selected)
+            else:
+                x_edge = get_epilepsiae_non_seizure(file_pat, state_len)
+                x_edge = np.squeeze(x_edge, axis=0)
+                concatenated = np.concatenate((x_edge, x_selected, x_edge), axis=0)
+                X_total.append(concatenated)
 
-            x_edge = get_epilepsiae_non_seizure(file_pat, state_len)
-            x_edge = np.squeeze(x_edge, axis=0)
-            concatenated = np.concatenate((x_edge, x_selected, x_edge), axis=0)
-            X_total.append(concatenated)
-
-            y_true_section = np.concatenate((np.zeros((state_len, 1), dtype=np.float32),
-                                             y_selected,
-                                             np.zeros((state_len, 1), dtype=np.float32)))
-            y_total.append(y_true_section)
+                y_true_section = np.concatenate((np.zeros((state_len, 1), dtype=np.float32),
+                                                 y_selected,
+                                                 np.zeros((state_len, 1), dtype=np.float32)))
+                y_total.append(y_true_section)
     return np.asarray(X_total), np.asarray(y_total)
 
 

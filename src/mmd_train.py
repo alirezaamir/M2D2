@@ -31,29 +31,31 @@ LATENT_DIM = 16
 
 def train_model():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/no_mmd_v63".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_BVIB_v63".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
     middle_diff = []
-    all_filenames = get_all_filenames(entire_dataset=True)
+    # all_filenames = get_all_filenames(entire_dataset=False)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in [-1]:  # ["-1"]:  # range(30):  # range(1,24):
-        # test_patient = pat_list[test_id]
-        test_patient = str(test_id)
-        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
-        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+    for test_id in range(14,30):  # ["-1"]:  # range(30):  # range(1,24):
+        test_patient = pat_list[test_id]
+        # test_patient = str(test_id)
+        # train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+        train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN, state_len=None)
+        # val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+        val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN, state_len=None)
         print("Shape :{}".format(train_data.shape))
         print("Shape :{}".format(train_label.shape))
 
-        train_data = np.reshape(train_data, newshape=(-1, 1024, 2))
-        train_label = np.reshape(train_label, newshape=(-1, 1))
-        val_data = np.reshape(val_data, newshape=(-1, 1024, 2))
-        val_label = np.reshape(val_label, newshape=(-1, 1))
+        # train_data = np.reshape(train_data, newshape=(-1, 1024, 2))
+        # train_label = np.reshape(train_label, newshape=(-1, 1))
+        # val_data = np.reshape(val_data, newshape=(-1, 1024, 2))
+        # val_label = np.reshape(val_label, newshape=(-1, 1))
 
 
         # load the model
-        vae_mmd_model = vae_model.get_FCN_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
+        vae_mmd_model = vae_model.get_conventional_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
 
         print(vae_mmd_model.summary())
@@ -64,7 +66,7 @@ def train_model():
 
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.SGD(), loss='binary_crossentropy')
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(), loss='binary_crossentropy')
 
         BCE = tf.keras.losses.BinaryCrossentropy()
         bce_train = []
@@ -74,22 +76,10 @@ def train_model():
         if not os.path.exists(savedir):
             os.makedirs(savedir)
 
-        for iter in range(100):
-            # vae_mmd_model.save(savedir)
-            vae_mmd_model.fit(x=train_data, y=train_label, batch_size=32, epochs=1, verbose=2)
+        vae_mmd_model.fit(x=train_data, y=train_label, validation_data=[val_data, val_label], batch_size=1, epochs=100)
 
-            predict = vae_mmd_model.predict(x=train_data, batch_size=32)
-            LOG.info("BCE TRN epoch {} = {}".format(iter, BCE(y_pred=predict, y_true=train_label)))
-            bce_train.append( BCE(y_pred=predict, y_true=train_label))
-            predict = vae_mmd_model.predict(x=val_data, batch_size=32)
-            LOG.info("BCE VAL epoch {} = {}".format(iter, BCE(y_pred=predict, y_true=val_label)))
-            bce_val.append(BCE(y_pred=predict, y_true=val_label))
-
-            del predict
-
-        print("Train: {}\nVal:{}".format(bce_train, bce_val))
-        # diffs = inference(int(test_patient), trained_model=vae_mmd_model, subdirname=subdirname, dataset='CHB')
-        # middle_diff += diffs
+        diffs = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname, dataset='Epilepsiae')
+        middle_diff += diffs
         vae_mmd_model.save(savedir)
     # plt.figure()
     # plt.hist(middle_diff)
@@ -160,11 +150,11 @@ def get_results():
     This method is only for evaluation a saved model
     """
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_BVIB_v63".format(SEG_LENGTH, arch)
     diffs = []
-    for pat_id in range(1, 24):
+    for pat_id in pat_list:
         pat = pat_id
-        diff_pat= inference(pat, None, subdirname, dataset='CHB')
+        diff_pat= inference(pat, None, subdirname, dataset='Epilepsiae')
         diffs += diff_pat
     print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
     diffs_minute = [x / 15.0 for x in diffs]
@@ -175,7 +165,7 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'no_mmd_v63'
+    source_model = 'Epilepsiae_BVIB_v63'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
@@ -184,12 +174,12 @@ def across_dataset():
     save_path = '../temp/vae_mmd/integrated/{}/{}/{}/model/test_{}/saved_model/'.format(SEG_LENGTH,
                                                                                         source_arch,
                                                                                         source_model,
-                                                                                        -1)
+                                                                                        'pat_102')
     trained_model = tf.keras.models.load_model(save_path)
-    for pat_id in range(30):
-        # pat = pat_id
-        pat = pat_list[pat_id]
-        diff_pat = inference(pat, trained_model, subdirname, dataset='Epilepsiae')
+    for pat_id in range(1,24):
+        pat = pat_id
+        # pat = pat_list[pat_id]
+        diff_pat = inference(pat, trained_model, subdirname, dataset='CHB')
         diffs += diff_pat
     print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
     diffs_minute = [x / 15.0 for x in diffs]
@@ -201,5 +191,5 @@ def across_dataset():
 if __name__ == "__main__":
     # tf.config.experimental.set_visible_devices([], 'GPU')
     # train_model()
-    get_results()
-    # across_dataset()
+    # get_results()
+    across_dataset()
