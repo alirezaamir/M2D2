@@ -234,11 +234,13 @@ def prepare_pickle_files():
 
 
 def classify():
-    features_dict = pickle.load(open("../test_code/Features_Eglass_chb.pickle", "rb"))
+    features_dict = pickle.load(open("../test_code/Features_Eglass_new_epilepsiae.pickle", "rb"))
     middle_diff = []
-    for test_patient in [1]: #range(1,24):
-        train_files = [x for x in features_dict.keys() if not x.startswith("chb{:02d}".format(test_patient))]
-        test_files = [x for x in features_dict.keys() if x.startswith("chb{:02d}".format(test_patient))]
+    for test_patient in pat_list: #range(1,24):
+        # train_files = [x for x in features_dict.keys() if not x.startswith("chb{:02d}".format(test_patient))]
+        train_files = [x for x in features_dict.keys() if not x.startswith("{}".format(test_patient))]
+        # test_files = [x for x in features_dict.keys() if x.startswith("chb{:02d}".format(test_patient))]
+        test_files = [x for x in features_dict.keys() if x.startswith("{}".format(test_patient))]
         train_data = np.zeros((0,108))
         train_label = np.zeros((0,))
         for pat_file in train_files:
@@ -266,7 +268,7 @@ def classify():
             train_label_balanced = train_label_balanced[idx]
 
             rf.fit(train_data_balanced, train_label_balanced)
-        pickle.dump(rf, open("../test_code/model_{}.pickle".format(test_patient), "wb"))
+        pickle.dump(rf, open("../test_code/models/model_{}.pickle".format(test_patient), "wb"))
 
         for pat_file in test_files:
             test_data = features_dict[pat_file]['X']
@@ -295,7 +297,7 @@ def classify():
 
 
 def classify_epilepsiae():
-    features_dict = pickle.load(open("../test_code/Features_Eglass_chb.pickle", "rb"))
+    features_dict = pickle.load(open("../test_code/Features_Eglass_new_epilepsiae.pickle", "rb"))
     middle_diff = []
     train_files = features_dict.keys()
     train_data = np.zeros((0, 108))
@@ -324,8 +326,8 @@ def classify_epilepsiae():
 
         rf.fit(train_data_balanced, train_label_balanced)
 
-    pickle.dump(rf, open("../test_code/model_{}.pickle".format(-1), "wb"))
-    features_dict = pickle.load(open("../test_code/Features_Eglass_new_epilepsiae.pickle", "rb"))
+    pickle.dump(rf, open("../test_code/models/model_{}.pickle".format(-1), "wb"))
+    features_dict = pickle.load(open("../test_code/Features_Eglass_chb.pickle", "rb"))
 
     test_files = features_dict.keys()
     for pat_file in test_files:
@@ -415,12 +417,12 @@ def inference(test_patient):
 if __name__ == '__main__':
     # prepare_data("-1")
     # prepare_epilepsiae()
-    # classify()
+    classify()
     # classify_epilepsiae()
     # inference(-1)
     # prepare_pickle_files()
-    middle_diff = {}
-    for pat in range(1,24):
-        middle_diff.update(inference(pat))
-    print(middle_diff)
+    # middle_diff = {}
+    # for pat in range(1,24):
+    #     middle_diff.update(inference(pat))
+    # print(middle_diff)
 
