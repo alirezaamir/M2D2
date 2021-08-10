@@ -127,12 +127,12 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    source_arch = 'vae_unsup_chb'
-    test_arch = 'Epilepsiae_un'
+    source_arch = 'epilepsiae'
+    test_arch = 'Epilepsiae_loocv'
     beta = 1e-05
-    latent_dim = 128
-    lr = 0.0001
-    decay = 0.02
+    latent_dim = 16
+    lr = 1e-05
+    decay = 0.5
     gamma = 0.0
 
     root = "../output/vae/{}/".format(source_arch)
@@ -164,10 +164,10 @@ def main():
     z_dict = {}
     # for test_patient in range(1,25):
     J_list = {}
-    for pat_id in pat_list:#range(1,25):
+    for pat_id in range(1,24):#pat_list:#range(1,25):
         # test_patient = pat_list[pat_id]
         source_pat = -1
-        sessions = get_epilepsiae_test(test_patient=pat_id)
+        sessions = build_dataset_pickle(test_patient=pat_id)
         # sessions = (test_patient=test_patient)
 
         # Load the specific weights for the model
@@ -179,9 +179,12 @@ def main():
         intermediate_model = tf.keras.models.Model(inputs=model.inputs, outputs=model.layers[1].output)
 
         for node in sessions.keys():   # Loop2: nodes in the dataset
-            # print("node: {}".format(node))
-            # patient_num = int(node[3:5])
-            # if test_patient != patient_num:
+            # patient_num = node.split('_')
+            # node_id = "pat_{}".format(patient_num[1])
+            # print("node: {}".format(node_id))
+            # print("pat id: {}".format(pat_id))
+            # if node_id == pat_id:
+            #     print("Equal file : {}".format(node))
             #     continue
 
             LOG.info("session name: {}".format(pat_id))
@@ -195,12 +198,12 @@ def main():
             LOG.info("Session {}\nmean:{}, std: {}".format(node, np.mean(X), np.std(X)))
 
             latent = intermediate_model.predict(X)[2]
-            z_dict[node] = latent
-            print("Z space {} : {}".format(node, latent.shape))
+            # z_dict[node] = latent
+            # print("Z space {} : {}".format(node, latent.shape))
             print("y true: {}".format(y_true.shape))
-            Sb, Sw, J = get_within_between(latent, y_true)
-            J_list[node] = J
-            continue
+            # Sb, Sw, J = get_within_between(latent, y_true)
+            # J_list[node] = J
+            # continue
 
             K = kernel(latent)
             mmd_maximum, mmd = get_changing_points(K, 1)

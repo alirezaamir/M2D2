@@ -26,20 +26,21 @@ LOG.setLevel(logging.INFO)
 SEG_LENGTH = 1024
 SEQ_LEN = 899
 STATE_LEN = 899
-LATENT_DIM = 16
+LATENT_DIM = 32
 
 
 def train_model():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_BVIB_v63".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_proposed_v63".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
     middle_diff = []
     # all_filenames = get_all_filenames(entire_dataset=False)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    for test_id in range(14,30):  # ["-1"]:  # range(30):  # range(1,24):
-        test_patient = pat_list[test_id]
+
+    for test_id in range(1):  # ["-1"]:  # range(30):  # range(1,24):
+        test_patient = '26102' #pat_list[test_id]
         # test_patient = str(test_id)
         # train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
         train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN, state_len=None)
@@ -55,14 +56,14 @@ def train_model():
 
 
         # load the model
-        vae_mmd_model = vae_model.get_conventional_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
+        vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
 
         print(vae_mmd_model.summary())
 
         # load the weights in the convolution layer
-        # conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
-        # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
+        conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
+        vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
@@ -76,7 +77,7 @@ def train_model():
         if not os.path.exists(savedir):
             os.makedirs(savedir)
 
-        vae_mmd_model.fit(x=train_data, y=train_label, validation_data=[val_data, val_label], batch_size=1, epochs=100)
+        vae_mmd_model.fit(x=train_data, y=train_label, validation_data=[val_data, val_label], batch_size=1, epochs=40)
 
         diffs = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname, dataset='Epilepsiae')
         middle_diff += diffs
@@ -150,7 +151,7 @@ def get_results():
     This method is only for evaluation a saved model
     """
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_BVIB_v63".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_v62".format(SEG_LENGTH, arch)
     diffs = []
     for pat_id in pat_list:
         pat = pat_id
@@ -165,7 +166,7 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'Epilepsiae_BVIB_v63'
+    source_model = 'Epilepsiae_v62'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
@@ -174,7 +175,7 @@ def across_dataset():
     save_path = '../temp/vae_mmd/integrated/{}/{}/{}/model/test_{}/saved_model/'.format(SEG_LENGTH,
                                                                                         source_arch,
                                                                                         source_model,
-                                                                                        'pat_102')
+                                                                                        'pat_11002')
     trained_model = tf.keras.models.load_model(save_path)
     for pat_id in range(1,24):
         pat = pat_id
@@ -189,7 +190,7 @@ def across_dataset():
 
 
 if __name__ == "__main__":
-    # tf.config.experimental.set_visible_devices([], 'GPU')
+    tf.config.experimental.set_visible_devices([], 'GPU')
     # train_model()
     # get_results()
     across_dataset()
