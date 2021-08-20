@@ -60,26 +60,57 @@ def save_pickle(data, dirname, record_name, window_size):
         pickle.dump(output_dict, pickle_file)
 
 
-def read_edf_file(record_name, seizure_list):
-    print("Record: {}".format(record_name))
-    edf_filename = '../input/chbmit/1.0.0/{}'.format(record_name)
-    signals, signal_headers, header = pyedflib.highlevel.read_edf(edf_filename)
-    T7F7, T8F8 = get_TxFx_channels(signal_headers)
-    if T7F7 == 0 and T8F8 == 0:
-        np.zeros((0, 3))
-    print("Reading {}".format(record_name))
-    channel1 = np.expand_dims(signals[T7F7], axis=1)
-    channel2 = np.expand_dims(signals[T8F8], axis=1)
-    eeg_data = np.concatenate((channel1, channel2), axis=1)
+def get_full_channels(signal_headers):
+    ref_header = ['FP1-F7', 'F7-T7', 'T7-P7', 'P7-O1', 'FP1-F3', 'F3-C3', 'C3-P3', 'P3-O1', 'FP2-F4', 'F4-C4', 'C4-P4',
+              'P4-O2', 'FP2-F8', 'F8-T8', 'T8-P8', 'P8-O2', 'FZ-CZ', 'CZ-PZ', 'P7-T7', 'T7-FT9', 'FT9-FT10', 'FT10-T8']
+    indices = []
+    for h in ref_header:
+        if h in signal_headers:
+            index = signal_headers.index(h)
+            indices.append(index)
+        else:
+            return None
+    T8_p8_index = signal_headers.index('T8-P8')
+    if 'T8-P8' in signal_headers[T8_p8_index+1:]:
+        second_index =  signal_headers.index('T8-P8', T8_p8_index+1)
+        indices.append(second_index)
+    else:
+        indices.append(T8_p8_index)
+    return indices
 
-    length = eeg_data.shape[0]
-    label = np.zeros((length, 1))
+
+
+
+def read_edf_file(record_name, seizure_list):
+
     if record_name in seizure_list:
+        print("Record: {}".format(record_name))
+        edf_filename = '../../input/chbmit/1.0.0/{}'.format(record_name)
+        signals, signal_headers, header = pyedflib.highlevel.read_edf(edf_filename)
+        # print("Header: {}".format(signal_headers))
+
+        channels = get_full_channels([h['label'] for h in signal_headers])
+        print(channels)
+        if channels is None: return
+        eeg_data = np.zeros((len(signals[0]), 0))
+        for ch in channels:
+            ch_expanded = np.expand_dims(signals[ch], axis=1)
+            eeg_data = np.concatenate((eeg_data, ch_expanded), axis=1)
+        print("Shape : {}".format(eeg_data.shape))
+
+        length = eeg_data.shape[0]
+        label = np.zeros((length, 1))
         for start, end in seizure_list[record_name]:
             label[start * FS: end * FS] = 1
             print("Start: {}, End: {}".format(start, end))
-    eeg_data = np.concatenate((eeg_data, label), axis=1)
-    return eeg_data
+
+        dirname = "../../temp/vae_mmd_data/23channel/train"
+        filename = "{}/{}.pickle".format(dirname, record_name.split('/')[-1][:-4])
+        output_dict = {"X": eeg_data, "y": label}
+        with open(filename, 'wb') as pickle_file:
+            pickle.dump(output_dict, pickle_file)
+    return
+
 
 
 def main():
@@ -92,19 +123,19 @@ def main():
 
     for rec in records:
         record_name = rec.replace('\n', '')
-        m = np.random.choice(["train", "valid"], p=[0.9, 0.1])
+        # m = np.random.choice(["train", "valid"], p=[0.9, 0.1])
+        m = "train"
         modes[m].append(record_name)
         # eeg_data = read_edf_file(record_name, seizure_list)
         # if m == "train":
         #     S.partial_fit(eeg_data[:, :-1])
 
     for m in modes:
-        dirname = "../temp/vae_mmd_data/{}/{}/{}".format(SEG_N, "full_normal", m)
+        dirname = "../temp/vae_mmd_data/{}/{}/{}".format(SEG_N, "FCN", m)
         if not os.path.exists(dirname):
             os.makedirs(dirname)
         for record_name in modes[m]:
-            data = read_edf_file(record_name, seizure_list)
-            save_pickle(data, dirname, record_name, SEG_N)
+            read_edf_file(record_name, seizure_list)
 
 
 def epilepsiae():
@@ -213,7 +244,7 @@ def epilepsiae2pickle(test_patient, root):
 
 
 if __name__ == '__main__':
-    # main()
+    main()
     # epilepsiae_seizures()
-    for pat in pat_list:
-        epilepsiae2pickle(pat, root='../..')
+    # for pat in pat_list:
+    #     epilepsiae2pickle(pat, root='../..')
