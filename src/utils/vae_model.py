@@ -13,7 +13,7 @@ def get_FCN_model(state_len=None,
                   signal_len=None,
                   seq_len = None,
                   trainable_vae=True):
-    input_signal = tf.keras.layers.Input(shape=(signal_len, 2))
+    input_signal = tf.keras.layers.Input(shape=(signal_len, 23))
     x = input_signal
     x = layers.Conv1D(128, 3, padding="same", activation=None,
                                              kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4))(x)
@@ -36,7 +36,7 @@ def get_FCN_model(state_len=None,
                                              kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4))(x)
     x = layers.Dropout(rate=0.3)(x)
 
-    final_dense = layers.Dense(1, activation='sigmoid',
+    final_dense = layers.Dense(2, activation='softmax',
                                              kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4))(x)
 
     model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
