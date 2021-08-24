@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from utils.data23 import get_balanced_data, get_test_data
+from utils.data23 import get_balanced_data, get_test_data, get_test_overlapped
 from sklearn.metrics import f1_score
 import pathlib
 import matplotlib.pyplot as plt
@@ -62,6 +62,38 @@ def save_model(model, subdirname, test_patient):
     tflite_model_quant_file.write_bytes(model)
 
 
+def save_c_data(model):
+    dirname = '../../output/C_data'
+
+    for layer in model.layers:
+        print("Name: {}".format(layer.name))
+        if layer.name.startswith("conv"):
+            np.save("{}/{}_w".format(dirname, layer.name), layer.get_weights()[0])
+            np.save("{}/{}_b".format(dirname, layer.name), layer.get_weights()[1])
+        if layer.name.startswith("batch"):
+            np.save("{}/{}_gamma".format(dirname, layer.name), layer.get_weights()[0])
+            np.save("{}/{}_betta".format(dirname, layer.name), layer.get_weights()[1])
+            np.save("{}/{}_mean".format(dirname, layer.name), layer.get_weights()[2])
+            var_inv = 1/np.sqrt(np.add(layer.get_weights()[3], 0.001))
+            np.save("{}/{}_var".format(dirname, layer.name), var_inv)
+        if layer.name.startswith("dense"):
+            np.save("{}/{}_w".format(dirname, layer.name), layer.get_weights()[0])
+            np.save("{}/{}_b".format(dirname, layer.name), layer.get_weights()[1])
+
+
+def save_input_data(test_patient):
+    X_test, y_test = get_test_overlapped(test_patient, root='../')
+    X_test = np.clip(X_test, a_min=-250, a_max=250)
+    np.random.seed(137)
+    permutation_list = np.random.permutation(range(X_test.shape[0]))
+    X_test = X_test[permutation_list]
+    y_test = y_test[permutation_list]
+    dirname = '../../output/C_data'
+    print(X_test.shape)
+    print(np.where(y_test[:2000] == 1)[0].shape)
+    np.save("{}/input".format(dirname), X_test[:2000])
+
+
 def tf_inference(subdirname, test_patient:int):
     X_test, y_test = get_test_data(test_patient, root='../')
     X_test = np.clip(X_test, a_min=-250, a_max=250)
@@ -90,11 +122,16 @@ def tf_inference(subdirname, test_patient:int):
 
 
 def inference(model, test_patient:int):
-    X_test, y_test = get_test_data(test_patient, root='../')
+    X_test, y_test = get_test_overlapped(test_patient, root='../')
     X_test = np.clip(X_test, a_min=-250, a_max=250)
-    predicted = model.predict(X_test)
+    np.random.seed(137)
+    permutation_list = np.random.permutation(range(X_test.shape[0]))
+    X_test = X_test[permutation_list]
+    y_test = y_test[permutation_list]
+    predicted = model.predict(X_test[:2000])
     y_pred = np.argmax(predicted, axis=1)
-    return f1_score(y_test, y_pred)
+    print(np.where(y_test[:2000] == 1)[0].shape)
+    return f1_score(y_test[:2000], y_pred)
 
 
 def get_results():
@@ -102,16 +139,18 @@ def get_results():
     subdirname = "../../temp/vae_mmd/integrated/1024/{}/FCN_v1".format(arch)
     f1_orig = []
     f1_qnt = []
-    for pat_id in range(12, 24):
+    for pat_id in range(1, 2):
         print("PATIENT : {}".format(pat_id))
         # save_path = '{}/model/test_{}/saved_model/'.format(subdirname, pat_id)
         # trained_model = tf.keras.models.load_model(save_path)
         # f1_orig.append(inference(trained_model, test_patient=pat_id))
 
-        save_path = '{}/model/q_8_test_{}/saved_model/'.format(subdirname, pat_id)
+        save_path = '{}/model/test_{}/saved_model/'.format(subdirname, pat_id)
         trained_model = tf.keras.models.load_model(save_path)
-        q_model = my_quantized_model(trained_model, 5, 8)
-        f1_qnt.append(inference(q_model, test_patient=pat_id))
+        # q_model = my_quantized_model(trained_model, 5, 8)
+        f1_qnt.append(inference(trained_model, test_patient=pat_id))
+        save_c_data(trained_model)
+        save_input_data(test_patient=pat_id)
 
     # print("Original : {}".format(f1_orig))
     # print("Original : {}".format(np.mean(f1_orig)))
