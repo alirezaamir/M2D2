@@ -84,8 +84,8 @@ def get_balanced_data(test_patient, ictal_ratio = 1.0, inter_ratio =1.0, non_rat
     return X, label
 
 
-def get_test_data(test_patient):
-    dir_path = '../input/chbmit_overlapped/{}.pickle'
+def get_test_data(test_patient, root=''):
+    dir_path = root + '../input/chbmit_overlapped/{}.pickle'
     pickle_file = open(dir_path.format(test_patient), "rb")
     data = pickle.load(pickle_file)
     X = np.concatenate((data["ictal"], data["inter_ictal"], data["non_ictal"]), axis=0)

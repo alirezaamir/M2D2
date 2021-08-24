@@ -16,7 +16,9 @@ from vae_mmd import plot_mmd
 from utils.params import pat_list
 from utils.data23 import get_balanced_data, get_test_data
 from sklearn.metrics import confusion_matrix, f1_score
-import datetime
+import matplotlib
+from utils.quantization import my_quantized_model
+
 
 LOG = logging.getLogger(os.path.basename(__file__))
 ch = logging.StreamHandler()
@@ -29,6 +31,8 @@ SEG_LENGTH = 1024
 SEQ_LEN = 899
 STATE_LEN = 899
 LATENT_DIM = 32
+NUM_FRACTIONS = 5
+BITS = 8
 
 
 def train_model():
@@ -37,11 +41,7 @@ def train_model():
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
-    middle_diff = []
-    # all_filenames = get_all_filenames(entire_dataset=False)
-    input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-
-    for test_id in range(6, 24):  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in range(1, 24):  # ["-1"]:  # range(30):  # range(1,24):
         # load the model
         vae_mmd_model = vae_model.get_FCN_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
@@ -56,7 +56,8 @@ def train_model():
 
         for iter in range(20):
             try:
-                train_data, train_label = get_balanced_data(test_id, ictal_ratio=0.05, inter_ratio=0.03, non_ratio=0.02)
+                train_data, train_label = get_balanced_data(test_id, ictal_ratio=0.05, inter_ratio=0.05, non_ratio=0.02)
+                train_data = np.clip(train_data, a_min=-250, a_max=250)
                 vae_mmd_model.fit(x=train_data, y=tf.keras.utils.to_categorical(train_label, 2), batch_size=32, epochs=10)
                 del train_data, train_label
                 # test_data, test_label = get_test_data(test_id)
@@ -65,11 +66,39 @@ def train_model():
             except MemoryError:
                 print("Memory Error")
 
-
         vae_mmd_model.save(savedir)
-    # plt.figure()
-    # plt.hist(middle_diff)
-    # plt.savefig("{}/hist_diff.png".format(subdirname))
+
+
+def retrain_model():
+    arch = '23channel'
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v1".format(SEG_LENGTH, arch)
+
+    for test_id in range(1, 24):  # ["-1"]:  # range(30):  # range(1,24):
+        load_dir = '{}/model/test_{}/saved_model/'.format(subdirname, test_id)
+        vae_mmd_model = tf.keras.models.load_model(load_dir)
+        print(vae_mmd_model.summary())
+
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(), loss='categorical_crossentropy',
+                              metrics='accuracy')
+
+        for iter in range(5):
+            try:
+                train_data, train_label = get_balanced_data(test_id, ictal_ratio=0.05, inter_ratio=0.05,
+                                                            non_ratio=0.02)
+                train_data = np.clip(train_data, a_min=-250, a_max=250)
+                vae_mmd_model = my_quantized_model(vae_mmd_model, NUM_FRACTIONS, BITS)
+
+                vae_mmd_model.fit(x=train_data, y=tf.keras.utils.to_categorical(train_label, 2), batch_size=32,
+                                  epochs=2)
+                del train_data, train_label
+                train_data = None
+            except MemoryError:
+                print("Memory Error")
+
+        save_dir = '{}/model/q_{}_test_{}/saved_model/'.format(subdirname, BITS, test_id)
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        vae_mmd_model.save(save_dir)
 
 
 def inference(test_patient:int, trained_model, subdirname:str, dataset='CHB'):
@@ -145,5 +174,7 @@ def across_dataset():
 if __name__ == "__main__":
     # tf.config.experimental.set_visible_devices([], 'GPU')
     # train_model()
-    get_results()
+    # get_results()
     # across_dataset()
+    retrain_model()
+
