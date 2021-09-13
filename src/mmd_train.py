@@ -14,10 +14,10 @@ from utils.data import build_dataset_pickle as test_dataset
 from training import get_all_filenames
 from vae_mmd import plot_mmd
 from utils.params import pat_list
-from utils.data23 import get_balanced_data, get_test_data
+from utils.data23 import get_balanced_data, get_test_data, get_test_overlapped, get_non_seizure
 from sklearn.metrics import confusion_matrix, f1_score
 import matplotlib
-from utils.quantization import my_quantized_model
+from utils.quantization import my_quantized_model, scaled_model
 
 
 LOG = logging.getLogger(os.path.basename(__file__))
@@ -31,40 +31,44 @@ SEG_LENGTH = 1024
 SEQ_LEN = 899
 STATE_LEN = 899
 LATENT_DIM = 32
-NUM_FRACTIONS = 5
+NUM_FRACTIONS_B = 5
+NUM_FRACTIONS_W = 8
 BITS = 8
 
 
 def train_model():
     arch = '23channel'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v1".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v5".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
-    for test_id in range(1, 24):  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in range(22, 23):  # ["-1"]:  # range(30):  # range(1,24):
         # load the model
         vae_mmd_model = vae_model.get_FCN_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
 
         print(vae_mmd_model.summary())
 
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(), loss='categorical_crossentropy', metrics='accuracy')
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='categorical_crossentropy', metrics='accuracy')
 
         savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_id)
         if not os.path.exists(savedir):
             os.makedirs(savedir)
 
-        for iter in range(20):
+        for iter in range(200):
             try:
-                train_data, train_label = get_balanced_data(test_id, ictal_ratio=0.05, inter_ratio=0.05, non_ratio=0.02)
+                train_data, train_label = get_balanced_data(test_id, ictal_ratio=0.03, inter_ratio=0.03, non_ratio=0.02)
                 train_data = np.clip(train_data, a_min=-250, a_max=250)
-                vae_mmd_model.fit(x=train_data, y=tf.keras.utils.to_categorical(train_label, 2), batch_size=32, epochs=10)
+                train_data = train_data / 250
+                vae_mmd_model.fit(x=train_data, y=tf.keras.utils.to_categorical(train_label, 2), batch_size=32,
+                                  initial_epoch= iter*5, epochs=(iter+1)*5)
                 del train_data, train_label
                 # test_data, test_label = get_test_data(test_id)
                 # eval = vae_mmd_model.evaluate(x=test_data, y=tf.keras.utils.to_categorical(test_label))
                 train_data = None
             except MemoryError:
                 print("Memory Error")
+                continue
 
         vae_mmd_model.save(savedir)
 
@@ -73,29 +77,40 @@ def retrain_model():
     arch = '23channel'
     subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v1".format(SEG_LENGTH, arch)
 
-    for test_id in range(1, 24):  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in range(22, 23):  # ["-1"]:  # range(30):  # range(1,24):
         load_dir = '{}/model/test_{}/saved_model/'.format(subdirname, test_id)
         vae_mmd_model = tf.keras.models.load_model(load_dir)
         print(vae_mmd_model.summary())
 
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(), loss='categorical_crossentropy',
-                              metrics='accuracy')
+        scaled_model(vae_mmd_model)
+        for trainable_index in [1, 3, 6, 8, 11, 13, 17]:
+            print("Conv1d Before Quantization : {}".format(np.mean(vae_mmd_model.layers[6].get_weights()[0])))
+            vae_mmd_model = my_quantized_model(vae_mmd_model, NUM_FRACTIONS_W, NUM_FRACTIONS_B, BITS)
+            print("Conv1d After Quantization : {}".format(np.mean(vae_mmd_model.layers[6].get_weights()[0])))
+            for layers_behind in range(trainable_index+1):
+                vae_mmd_model.layers[layers_behind].trainable = False
+            time.sleep(10)
+            vae_mmd_model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=1e-3),
+                                  loss='categorical_crossentropy',
+                                  metrics='accuracy')
+            # for layer in vae_mmd_model.layers:
+            #     print("Layer {}, Trainable {}".format(layer.name, layer.trainable))
+            for _ in range(15):
+                try:
+                    train_data, train_label = get_balanced_data(test_id, ictal_ratio=0.03, inter_ratio=0.03,
+                                                                non_ratio=0.02)
+                    train_data = np.clip(train_data, a_min=-250, a_max=250) / 250.0
+                    vae_mmd_model.fit(x=train_data, y=tf.keras.utils.to_categorical(train_label, 2), batch_size=32,
+                                      epochs=2)
+                    del train_data, train_label
+                    train_data = None
+                except MemoryError:
+                    print("Memory Error")
+                    time.sleep(5)
+                    train_data = None
+                    time.sleep(5)
 
-        for iter in range(5):
-            try:
-                train_data, train_label = get_balanced_data(test_id, ictal_ratio=0.05, inter_ratio=0.05,
-                                                            non_ratio=0.02)
-                train_data = np.clip(train_data, a_min=-250, a_max=250)
-                vae_mmd_model = my_quantized_model(vae_mmd_model, NUM_FRACTIONS, BITS)
-
-                vae_mmd_model.fit(x=train_data, y=tf.keras.utils.to_categorical(train_label, 2), batch_size=32,
-                                  epochs=2)
-                del train_data, train_label
-                train_data = None
-            except MemoryError:
-                print("Memory Error")
-
-        save_dir = '{}/model/q_{}_test_{}/saved_model/'.format(subdirname, BITS, test_id)
+        save_dir = '{}/model/q_{}_test_{}_v3/saved_model/'.format(subdirname, BITS, test_id)
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
         vae_mmd_model.save(save_dir)
@@ -111,11 +126,13 @@ def inference(test_patient:int, trained_model, subdirname:str, dataset='CHB'):
     :return: int[], distances from the seizure for every sessions
     """
 
-    X_test, y_test = get_test_data(test_patient)
+    X_test, y_test = get_non_seizure(test_patient)
+    X_test = np.clip(X_test, a_min=-250, a_max=250)
+    X_test = X_test/250
 
     # Load the trained model
     if trained_model is None:
-        save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
+        save_path = '{}/model/q_8_test_{}/saved_model/'.format(subdirname, test_patient)
         trained_model = tf.keras.models.load_model(save_path)
         vae_mmd_model = trained_model
     else:
@@ -129,7 +146,9 @@ def inference(test_patient:int, trained_model, subdirname:str, dataset='CHB'):
     print("Pat : {}\n Conf Mat : {}".format(test_patient, conf_mat))
     print("F1-score : {}".format(f1_score(y_test, y_pred)))
     f1 = [91.5, 95.5, 64, 49.5, 72.3, 28.1, 84.9, 35.6, 49.3, 80.5, 87.6, 7.1, 19.7, 0, 44.7, 22.5, 81.3, 47.1, 11.3, 37.8, 1.2, 68, 53.2]
-    return conf_mat
+    f1 = [72.03, 56.4, 33.5, 32.1,35.2, 0, 32.2, 21.2, 18.85, 76.84, 58.86, 7.14, 12.2, 0, 0, 4.9, 83.3, 71.2, 68.1, 7.14, 32.9, 21.9, 8.6]
+
+    return conf_mat, f1_score(y_test, y_pred)
 
 
 def get_results():
@@ -139,11 +158,14 @@ def get_results():
     arch = '23channel'
     subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v1".format(SEG_LENGTH, arch)
     conf_mat = [[0, 0],[0, 0]]
+    f1_scores =[]
     for pat_id in range(1, 24):
         pat = pat_id
-        pat_conf_mat = inference(pat, None, subdirname, dataset='CHB')
+        pat_conf_mat, f1 = inference(pat, None, subdirname, dataset='CHB')
         conf_mat = np.add(conf_mat, pat_conf_mat)
+        f1_scores.append(f1)
     print("Total Confusion matrix: {}".format(conf_mat))
+    print("F1 scores : {}".format(f1_scores))
 
 
 def across_dataset():
@@ -173,8 +195,8 @@ def across_dataset():
 
 if __name__ == "__main__":
     # tf.config.experimental.set_visible_devices([], 'GPU')
-    # train_model()
+    train_model()
     # get_results()
     # across_dataset()
-    retrain_model()
+    # retrain_model()
 

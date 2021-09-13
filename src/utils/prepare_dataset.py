@@ -83,7 +83,7 @@ def get_full_channels(signal_headers):
 
 def read_edf_file(record_name, seizure_list):
 
-    if record_name in seizure_list:
+    if record_name not in seizure_list:
         print("Record: {}".format(record_name))
         edf_filename = '../../input/chbmit/1.0.0/{}'.format(record_name)
         signals, signal_headers, header = pyedflib.highlevel.read_edf(edf_filename)
@@ -100,11 +100,11 @@ def read_edf_file(record_name, seizure_list):
 
         length = eeg_data.shape[0]
         label = np.zeros((length, 1))
-        for start, end in seizure_list[record_name]:
-            label[start * FS: end * FS] = 1
-            print("Start: {}, End: {}".format(start, end))
+        # for start, end in seizure_list[record_name]:
+        #     label[start * FS: end * FS] = 1
+        #     print("Start: {}, End: {}".format(start, end))
 
-        dirname = "../../temp/vae_mmd_data/23channel/train"
+        dirname = "../../temp/vae_mmd_data/23channel/non_ictal"
         filename = "{}/{}.pickle".format(dirname, record_name.split('/')[-1][:-4])
         output_dict = {"X": eeg_data, "y": label}
         with open(filename, 'wb') as pickle_file:

@@ -42,7 +42,7 @@ def dataset_training(mode, test_patient, dirname):
                     inter_ictal.append(x[start_index:start_index+1024, :])
                     # print("Inter-Ictal: {}, {}".format(start_index, start_index + 1024))
 
-                for start_index in range(0, x.shape[0] - 1024, 1024):
+                for start_index in range(0, x.shape[0] - 1024, 1024): # TODO: this part repeats for every ictal!
                     if (start_inter_ictal-4)*256 <= start_index <= end_inter_ictal*256:
                         continue
                     non_ictal.append(x[start_index:start_index+1024, :])
@@ -57,6 +57,28 @@ def dataset_training(mode, test_patient, dirname):
     return np.asarray(ictal), np.asarray(inter_ictal), np.asarray(non_ictal)
 
 
+def get_non_seizure(test_patient, root='../..'):
+    non_ictal = []
+    filepath = "{}/temp/vae_mmd_data/23channel/non_ictal".format(root)
+    filenames = ["{}/{}".format(filepath, x) for x in os.listdir(filepath) if
+                    x.startswith("chb{:02d}".format(test_patient))]
+    for filename in filenames:
+        name = filename.split('/')[-1]
+        name = name.split('.')[0]
+        pat = int(filename.split('/')[-1][3:5])
+
+        with open(filename, "rb") as pickle_file:
+            data = pickle.load(pickle_file)
+            x = np.array(data["X"])
+            del data
+
+            for start_index in range(0, x.shape[0] - 1024, 1024):
+                non_ictal.append(x[start_index:start_index+1024, :])
+
+    print("Non-Ictal: {}".format(len(non_ictal)))
+    return np.asarray(non_ictal), np.zeros((len(non_ictal)))
+
+
 def get_balanced_data(test_patient, ictal_ratio = 1.0, inter_ratio =1.0, non_ratio = 1.0):
     dir_path = '../input/chbmit_overlapped'
     ictal = np.zeros((0, 1024, 23))
@@ -64,8 +86,7 @@ def get_balanced_data(test_patient, ictal_ratio = 1.0, inter_ratio =1.0, non_rat
     non_ictal = np.zeros((0, 1024, 23))
     x_total = {"ictal": ictal, "inter_ictal": inter_ictal, "non_ictal": non_ictal}
     ratio = {"ictal": ictal_ratio, "inter_ictal": inter_ratio, "non_ictal": non_ratio}
-    for pat in [12, 1, 2, 15, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23]:
-        print(pat)
+    for pat in np.random.permutation([12, 1, 2, 15, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23]):
         if pat == test_patient:
             continue
 
@@ -77,14 +98,17 @@ def get_balanced_data(test_patient, ictal_ratio = 1.0, inter_ratio =1.0, non_rat
                 data = pickle.load(pickle_file)
                 x_total[mode] = np.concatenate((x_total[mode], data))
                 pickle_file.close()
+        if x_total["ictal"].shape[0] +  x_total["ictal"].shape[0]  + x_total["ictal"].shape[0] > 10000:
+            break
 
     X = np.concatenate((x_total["ictal"], x_total["inter_ictal"], x_total["non_ictal"]), axis=0)
     label = np.concatenate((np.ones(x_total["ictal"].shape[0]),
                             np.zeros(x_total["inter_ictal"].shape[0] + x_total["non_ictal"].shape[0])))
+    print("Train shape: {}".format(X.shape))
     return X, label
 
 
-def get_test_data(test_patient, root=''):
+def get_test_overlapped(test_patient, root=''):
     dir_path = root + '../input/chbmit_overlapped/{}.pickle'
     pickle_file = open(dir_path.format(test_patient), "rb")
     data = pickle.load(pickle_file)
@@ -92,6 +116,25 @@ def get_test_data(test_patient, root=''):
     label = np.concatenate((np.ones(data["ictal"].shape[0]), np.zeros(data["inter_ictal"].shape[0] + data["non_ictal"].shape[0])))
     pickle_file.close()
     return X, label
+
+
+def get_test_data(test_patient, root=''):
+    filepath = root+'../temp/vae_mmd_data/23channel/train'
+    filenames = ["{}/{}".format(filepath, x) for x in os.listdir(filepath) if
+                 x.startswith("chb{:02d}".format(test_patient))]
+    x_total = []
+    y_total = []
+    for filename in filenames:
+        with open(filename, "rb") as pickle_file:
+            data = pickle.load(pickle_file)
+            x = np.array(data["X"])
+            y = np.array(data["y"])
+            for start_index in range(0, x.shape[0] - 1024, 1024):
+                x_total.append(x[start_index:start_index + 1024, :])
+                y_total.append(0 if np.sum(y[start_index:start_index + 1024]) == 0 else 1)
+                # print("Non-Ictal: {}, {}".format(start_index, start_index + 1024))
+
+    return np.asarray(x_total), np.asarray(y_total)
 
 
 def split_files():
