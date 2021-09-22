@@ -356,11 +356,12 @@ def classify_epilepsiae():
 
 
 def inference(test_patient):
-    rf = pickle.load(open("../test_code/model_{}.pickle".format(test_patient), "rb"))
-    features_dict = pickle.load(open("../test_code/Features_Eglass_chb.pickle", "rb"))
+    rf = pickle.load(open("../test_code/models/model_{}.pickle".format(test_patient), "rb"))
+    features_dict = pickle.load(open("../test_code/Features_Eglass_new_epilepsiae.pickle", "rb"))
 
     # test_files = features_dict.keys()
-    test_files = [x for x in features_dict.keys() if x.startswith("chb{:02d}".format(test_patient))]
+    # test_files = [x for x in features_dict.keys() if x.startswith("chb{:02d}".format(test_patient))]
+    test_files = [x for x in features_dict.keys() if x.startswith("{}".format(test_patient))]
 
     middle_diff = {}
     for pat_file in test_files:
@@ -417,12 +418,14 @@ def inference(test_patient):
 if __name__ == '__main__':
     # prepare_data("-1")
     # prepare_epilepsiae()
-    classify()
+    # classify()
     # classify_epilepsiae()
-    # inference(-1)
+    mid_diff = {}
+    for pat in pat_list:
+        mid_diff.update(inference(pat))
     # prepare_pickle_files()
     # middle_diff = {}
     # for pat in range(1,24):
     #     middle_diff.update(inference(pat))
-    # print(middle_diff)
+    print(mid_diff)
 
