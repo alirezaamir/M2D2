@@ -29,9 +29,9 @@ STATE_LEN = 899
 LATENT_DIM = 32
 
 
-def train_model():
+def train_model(latent):
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_proposed_v63".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_s{}_max4_v109".format(SEG_LENGTH, arch, latent)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -39,15 +39,18 @@ def train_model():
     # all_filenames = get_all_filenames(entire_dataset=False)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
 
-    for test_id in range(1):  # ["-1"]:  # range(30):  # range(1,24):
-        test_patient = '26102' #pat_list[test_id]
+    for test_id in ["-1"]:  # ["-1"]:  # range(30):  # range(1,24):
+        # test_patient = pat_list[test_id]
+        test_patient = test_id
         # test_patient = str(test_id)
         # train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
-        train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN, state_len=None)
+        train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN, state_len=40)
         # val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
-        val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN, state_len=None)
+        val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN, state_len=40)
         print("Shape :{}".format(train_data.shape))
         print("Shape :{}".format(train_label.shape))
+        # train_data = np.clip(train_data, a_min=-10, a_max=10)
+        # val_data = np.clip(val_data, a_min=-10, a_max=10)
 
         # train_data = np.reshape(train_data, newshape=(-1, 1024, 2))
         # train_label = np.reshape(train_label, newshape=(-1, 1))
@@ -56,7 +59,7 @@ def train_model():
 
 
         # load the model
-        vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
+        vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=latent, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
 
         print(vae_mmd_model.summary())
@@ -67,7 +70,7 @@ def train_model():
 
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(), loss='binary_crossentropy')
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='binary_crossentropy')
 
         BCE = tf.keras.losses.BinaryCrossentropy()
         bce_train = []
@@ -77,7 +80,8 @@ def train_model():
         if not os.path.exists(savedir):
             os.makedirs(savedir)
 
-        vae_mmd_model.fit(x=train_data, y=train_label, validation_data=[val_data, val_label], batch_size=1, epochs=40)
+        vae_mmd_model.fit(x=train_data, y=train_label,
+                          validation_data=[val_data, val_label], batch_size=1, epochs=60)
 
         diffs = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname, dataset='Epilepsiae')
         middle_diff += diffs
@@ -129,6 +133,7 @@ def inference(test_patient:int, trained_model, subdirname:str, dataset='CHB'):
         X_edge = non_seizure_dataset(test_patient, state_len=STATE_LEN)
         concatenated = np.concatenate((X_edge, X_section, X_edge), axis=1)
         X_section = concatenated
+        # X_section = np.clip(X_section, a_min=-10, a_max=10)
 
         mmd_predicted = vae_mmd_model.predict(X_section)
 
@@ -151,7 +156,7 @@ def get_results():
     This method is only for evaluation a saved model
     """
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_v62".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_s16_v105".format(SEG_LENGTH, arch)
     diffs = []
     for pat_id in pat_list:
         pat = pat_id
@@ -166,31 +171,34 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'Epilepsiae_v62'
+    source_model = 'Epilepsiae_s16_max4_v109'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
     diffs = []
     nc = {}
+    pat_source = "-1"
     save_path = '../temp/vae_mmd/integrated/{}/{}/{}/model/test_{}/saved_model/'.format(SEG_LENGTH,
                                                                                         source_arch,
                                                                                         source_model,
-                                                                                        'pat_11002')
+                                                                                        pat_source)
     trained_model = tf.keras.models.load_model(save_path)
     for pat_id in range(1,24):
         pat = pat_id
         # pat = pat_list[pat_id]
         diff_pat = inference(pat, trained_model, subdirname, dataset='CHB')
         diffs += diff_pat
-    print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
-    diffs_minute = [x / 15.0 for x in diffs]
-    plt.figure()
-    plt.hist(diffs_minute, bins=150, range=(0, 200))
-    plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
+    print("Patient {}\nDifferences: {}\nMedian: {}\nMean: {}".format(pat_source, diffs, np.median(diffs), np.mean(diffs)))
+    #     diffs_minute = [x / 15.0 for x in diffs]
+    # plt.figure()
+    # plt.hist(diffs_minute, bins=150, range=(0, 200))
+    # plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
 
 
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    # train_model()
+    # for latent in [16, 32, 64]:
+    #     train_model(latent)
     # get_results()
     across_dataset()
+#

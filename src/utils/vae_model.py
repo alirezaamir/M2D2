@@ -115,11 +115,11 @@ def get_mmd_model(state_len=None,
     x = input_signal
     num_conv_layers = 3
     for i in range(num_conv_layers):
-        x = layers.TimeDistributed(layers.Conv1D(8, 3, padding="same", activation="relu", trainable=trainable_vae),
+        x = layers.TimeDistributed(layers.Conv1D(32, 3, padding="same", activation="relu", trainable=trainable_vae),
                                    name="conv1d_{}_1".format(i+1))(x)
-        x = layers.TimeDistributed(layers.Conv1D(8, 3, padding="same", activation="relu", trainable=trainable_vae),
+        x = layers.TimeDistributed(layers.Conv1D(32, 3, padding="same", activation="relu", trainable=trainable_vae),
                                    name="conv1d_{}_2".format(i+1))(x)
-        x = layers.TimeDistributed(layers.MaxPooling1D(2), name="pool_{}".format(i+1))(x)
+        x = layers.TimeDistributed(layers.MaxPooling1D(4), name="pool_{}".format(i+1))(x)
 
     x = layers.TimeDistributed(layers.Flatten(), name='flatten')(x)
     mu = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="mu", trainable=trainable_vae),
