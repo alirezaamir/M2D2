@@ -4,6 +4,7 @@ import tensorflow as tf
 from utils.data import build_dataset_pickle as test_dataset
 from utils.data import get_non_seizure_signal, get_epilepsiae_test
 from utils.params import pat_list
+import seaborn as sns
 
 
 def load_model(test_patient, model_name):
@@ -69,19 +70,19 @@ def predict_(test_patient, model_proposed, model_baseline):
         plt.savefig("../../output/signals/{}".format(node))
 
 
-proposed = np.dot(
+proposed_chb_loocv = np.dot(
     [0, 0, 0, 0, 0, 0, 0, 94, 11, 0, 0, 0, 0, 0, 0, 0, 0, 113, 0, 0, 0, 0, 0, 0, 1590, 380, 3156, 1024,
      659, 340, 927, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2752, 3, 0, 0, 0, 0, 0, 2, 0, 3, 0, 71, 0, 0, 1, 153,
      0, 6, 243, 1, 28, 0, 0, 1, 25, 20, 634, 161, 456, 618, 0, 173, 593, 238, 297, 0, 630, 67, 77, 113,
      2, 0, 254, 69, 0, 0, 262, 0, 594, 5, 0, 325, 0, 38, 219, 579, 300, 474, 296, 0, 0, 219, 0, 495,
      667, 223, 0, 181, 0, 0, 0, 505, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 246, 0, 0], 4)
-baseline = np.dot([0, 0, 0, 0, 0, 0, 0, 89, 38, 0, 0, 348, 0, 0, 0, 0, 1943, 106, 0, 0, 0, 0, 0, 0, 1659, 421, 680,
+bvib_chb_loocv = np.dot([0, 0, 0, 0, 0, 0, 0, 89, 38, 0, 0, 348, 0, 0, 0, 0, 1943, 106, 0, 0, 0, 0, 0, 0, 1659, 421, 680,
                    292, 101, 2927, 237, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2709, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 337, 0, 0,
                    0, 783, 0, 25, 243, 1, 50, 0, 426, 0, 140, 27, 634, 102, 0, 737, 0, 441, 538, 185, 105, 134, 211,
                    212, 18, 63, 249, 33, 427, 192, 0, 30, 316, 240, 193, 66, 80, 267, 0, 20, 28, 149, 303, 6, 137,
                    0,
                    0, 222, 57, 497, 129, 462, 0, 0, 0, 0, 0, 0, 0, 0, 0, 240, 0, 0, 48, 0, 0, 0, 258, 0, 0], 4)
-manual = np.dot([0, 0, 0, 0, 0, 0, 0, 86, 14, 11, 17, 339, 578, 9, 5, 0, 346, 104, 0, 0, 0, 0, 35, 0, 54, 419, 3105,
+bmmd_chb_loocv = np.dot([0, 0, 0, 0, 0, 0, 0, 86, 14, 11, 17, 339, 578, 9, 5, 0, 346, 104, 0, 0, 0, 0, 35, 0, 54, 419, 3105,
                  362, 653, 824, 1903, 46, 0, 0, 0, 0, 0, 0, 0, 0, 51, 2724, 366, 791, 460, 0, 184, 673, 1230, 0, 5,
                  647, 452, 6, 85, 139, 739, 19, 7, 6, 1, 93, 680, 184, 86, 178, 29, 90, 9, 0, 675, 0, 442, 565, 129,
                  247, 6, 543, 211, 615, 124, 324, 113, 137, 70, 131, 30, 285, 171, 95, 90, 423, 205, 150, 73, 29,
@@ -90,15 +91,15 @@ manual = np.dot([0, 0, 0, 0, 0, 0, 0, 86, 14, 11, 17, 339, 578, 9, 5, 0, 346, 10
                  0,
                  243, 254, 0, 0], 4)
 
-eglass = np.dot(
+bfet_chb_loocv = np.dot(
     [0, 0, 0, 0, 0, 0, 3, 0, 87, 13, 0, 0, 0, 0, 0, 0, 0, 306, 107, 0, 0, 0, 0, 0, 0, 61, 405, 2631, 1032, 94, 14, 185,
      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2927, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 436, 432, 0, 0, 160, 0, 97, 0, 49, 50, 0, 3, 0,
      140, 26, 32, 102, 282, 619, 0, 110, 225, 185, 280, 269, 211, 243, 55, 149, 0, 2, 0, 23, 2, 95, 314, 0, 193, 0, 0,
      405, 0, 20, 183, 43, 303, 8, 183, 0, 0, 184, 7, 224, 0, 230, 9, 460, 0, 0, 0, 0, 0, 0, 0, 0, 0, 151, 0, 0, 463, 0,
      0, 0, 252, 0, 0], 4)
 
-print(np.where(manual > 3600))
-eglass_epilepsiae = np.dot(
+# print(np.where(manual > 3600))
+bfet_chb_unseen = np.dot(
     [3, 314, 166, 573, 52, 12, 40, 0, 238, 45, 0, 39, 0, 227, 107, 42, 196, 169, 143, 1, 0, 55, 265, 640, 59, 70,
      0, 0, 0, 0, 658, 40, 0, 209, 413, 107, 338, 670, 217, 156, 2, 195, 132, 307, 181, 0, 141, 158, 275, 402,
      594, 352, 0, 80, 58, 214, 0, 7, 25, 0, 298, 3, 13, 1, 624, 0, 543, 0, 509, 511, 6, 339, 8, 124, 254, 142,
@@ -110,7 +111,7 @@ eglass_epilepsiae = np.dot(
      0, 466, 270, 93, 0, 27, 428, 256, 84, 140, 164, 363, 95, 540, 782, 0, 3, 395, 266, 436, 17, 0, 0, 10, 7, 0,
      107, 0, 0, 0, 0, 222, 61, 773, 207, 0, 0, 398, 0, 456, 201, 33, 0, 639, 40, 0, 154, 0, 389, 0, 0], 4)
 
-proposed_epilepsiae = np.dot(
+proposed_chb_unseen = np.dot(
     [10, 314, 166, 0, 0, 2, 574, 2, 12, 138, 0, 0, 0, 0, 177, 9, 195, 289, 0, 3, 0, 0, 264, 10, 151, 0, 0, 0, 0, 0,
      0, 0, 0, 302, 413, 71, 103, 52, 128, 392, 62, 203, 233, 254, 5, 108, 77, 52, 107, 401, 647, 84, 11, 209, 163,
      208, 18, 102, 23, 42, 106, 4, 0, 7, 625, 0, 220, 0, 508, 0, 283, 115, 149, 124, 827, 22, 329, 438, 552, 206, 0,
@@ -121,7 +122,7 @@ proposed_epilepsiae = np.dot(
      440, 235, 295, 0, 0, 31, 0, 0, 284, 0, 0, 465, 0, 0, 0, 0, 57, 277, 217, 0, 220, 243, 256, 423, 397, 0, 0, 120,
      103, 526, 234, 0, 199, 489, 432, 17, 0, 0, 136, 5, 0, 0, 0, 135, 0, 0, 201, 850, 726, 0, 0, 0, 513, 0, 0, 89,
      0, 0, 0, 0, 0, 0, 0, 601, 0, 0], 4)
-baseline_epilepsiae = np.dot(
+bvib_chb_unseen = np.dot(
     [11, 313, 0, 515, 450, 9, 9, 13, 235, 8, 176, 145, 37, 138, 170, 222, 196, 111, 55, 265, 0, 19, 264, 717, 206,
      0, 52, 730, 71, 771, 658, 0, 525, 209, 20, 85, 249, 132, 258, 117, 3, 198, 132, 9, 10, 78, 123, 32, 266, 402,
      265, 100, 8, 56, 202, 337, 0, 211, 23, 41, 104, 3, 200, 6, 624, 0, 537, 482, 208, 502, 348, 84, 33, 124, 822,
@@ -134,7 +135,7 @@ baseline_epilepsiae = np.dot(
      384, 435, 17, 453, 596, 0, 8, 378, 347, 8, 19, 191, 0, 221, 61, 725, 208, 0, 660, 553, 0, 7, 84, 86, 0, 544,
      26, 0, 124, 421, 8, 599, 93], 4)
 
-manual_epilepsiae = np.dot(
+bmmd_chb_unseen = np.dot(
     [19, 310, 78, 2, 12, 107, 59, 5, 231, 135, 166, 305, 524, 7, 167, 3, 199, 255, 55, 260, 0, 15, 256, 721, 151, 0,
      57, 0, 80, 0, 661, 17, 456, 207, 417, 395, 98, 125, 255, 160, 31, 198, 136, 22, 8, 44, 408, 152, 179, 398, 262,
      182, 0, 55, 173, 333, 0, 307, 21, 42, 99, 0, 14, 1, 207, 348, 535, 486, 522, 516, 70, 303, 133, 113, 103, 112,
@@ -147,14 +148,14 @@ manual_epilepsiae = np.dot(
      765, 676, 266, 219, 173, 380, 20, 15, 0, 238, 148, 154, 9, 250, 0, 43, 188, 0, 335, 84, 771, 208, 402, 422,
      541, 477, 269, 233, 5, 40, 548, 23, 107, 178, 225, 419, 785, 0], 4)
 
-FCN = np.dot(
+bfcn_chb_loocv = np.dot(
     [0, 0, 0, 0, 0, 0, 0, 91, 13, 0, 0, 0, 0, 0, 0, 0, 1943, 1889, 0, 0, 0, 0, 0, 0, 49, 2299, 121, 2332, 418, 3115,
      1939, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2709, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 0, 161, 0, 80, 117, 47, 50, 0,
      449, 0, 140, 25, 634, 47, 180, 737, 0, 603, 589, 185, 24, 336, 343, 138, 512, 46, 133, 541, 398, 243, 0, 30, 227,
      0, 0, 0, 0, 387, 242, 0, 0, 580, 111, 6, 219, 0, 0, 232, 0, 235, 70, 466, 0, 0, 0, 0, 0, 0, 0, 0, 0, 118, 0, 0,
      461, 0, 0, 0, 456, 64, 483]
     , 4)
-FCN_epilepsiae = np.dot(
+bfcn_chb_unseen = np.dot(
     [24, 313, 81, 589, 0, 4, 587, 13, 0, 137, 0, 0, 36, 138, 170, 195, 294, 446, 0, 157, 0, 51, 264, 717, 165, 0, 0, 0,
      130, 0, 0, 0, 10, 411, 358, 292, 330, 636, 258, 117, 62, 199, 119, 9, 181, 0, 106, 131, 348, 406, 631, 373, 8, 81,
      202, 337, 0, 331, 22, 41, 0, 19, 735, 6, 624, 0, 538, 0, 0, 502, 228, 63, 33, 133, 822, 135, 344, 438, 468, 94, 0,
@@ -167,7 +168,7 @@ FCN_epilepsiae = np.dot(
      527, 0, 305, 0, 0]
     , 4)
 
-print(np.where(FCN > 3600))
+# print(np.where(FCN > 3600))
 
 
 proposed_epilepsiae_loocv  = np.dot(   [3, 0, 0, 0, 0, 5, 0, 61, 0, 307, 0, 0, 0, 0, 0, 3, 195, 0, 0, 0, 0, 0, 261, 531, 0, 96, 0, 0, 0, 0, 0, 0, 13, 412, 10, 426, 666, 10, 136, 158, 60, 10, 42, 4, 11, 24, 164, 261, 620, 114, 265, 338, 745, 142, 48, 201, 1, 22, 27, 42, 318, 22, 7, 1, 627, 0, 533, 0, 0, 106, 268, 301, 95, 66, 416, 20, 372, 430, 6, 145, 0, 0, 0, 7, 0, 6, 0, 0, 0, 55, 0, 0, 55, 162, 6, 8, 28, 47, 23, 85, 0, 0, 405, 125, 0, 236, 0, 647, 315, 0, 5, 130, 12, 0, 0, 378, 0, 142, 0, 514, 120, 0, 0, 0, 0, 548, 0, 0, 79, 0, 0, 0, 602, 402, 145, 427, 379, 317, 388, 0, 79, 789, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 241, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15, 454, 0, 0, 142, 32, 0, 0, 0, 0, 0, 267, 0, 201, 10, 355, 209, 476, 0, 0, 0, 16, 24, 1, 0, 0, 196, 0, 0, 1, 0, 83, 430, 0, 0, 27, 844, 0, 0, 602, 0, 0, 322, 0, 0, 0, 0, 549, 666, 861, 0, 3, 369, 112, 217, 395, 0, 0, 134, 46, 439, 236, 0, 0, 0, 430, 0, 450, 0, 0, 0, 473, 0, 0, 1, 0, 0, 468, 61, 725, 0, 0, 530, 0, 0, 0, 432, 0, 0, 0, 0, 0, 395, 0, 316, 0, 0], 4)
@@ -193,6 +194,7 @@ print(np.mean(bfcn_epilepsiae_loocv ))
 print(np.mean(bmmd_epilepsiae_loocv ))
 # print(np.mean(bmmd_epilepsiae_unseen ))
 
+
 def plot_box():
     # fig, ax = plt.subplots(figsize=(8, 6))
     # colors = ['pink', 'lightblue', 'lightgreen']
@@ -206,24 +208,30 @@ def plot_box():
     # plt.yticks(ticks=np.arange(0, 3601, step=600), labels=[" {}".format(str(i)) for i in np.arange(0, 61, step=10)],
     #            fontsize=14)
     # plt.ylabel('Time (min)', fontsize=16)
-
+    # plt.style.use('ggplot')
     boxprops = dict(linewidth=3, color='black')
     capprops = dict(linewidth=3)
-    flierprops = dict(marker='x', markerfacecolor='red', markersize=8,
-                      markeredgecolor='red')
+    flierprops = dict(marker='o', markerfacecolor='black', markersize=6,
+                      markeredgecolor='black')
     medianprops = dict(linewidth=3.5, color='firebrick')
 
     # all_data = [proposed_epilepsiae_loocv, bvib_epilepsiae_loocv, bmmd_epilepsiae_loocv,
-    #             bfet_epilepsiae_loocv, bfcn_epilepsiae_loocv]
-    all_data = [proposed_epilepsiae_unseen, bvib_epilepsiae_unseen, bmmd_epilepsiae_unseen,
-                bfet_epilepsiae_unseen, bfcn_epilepsiae_unseen]
-    labels = ['Proposed', 'B-VIB', 'B-MMD', 'B-FET', 'B-FCN']
+    #             bfcn_epilepsiae_loocv, bfet_epilepsiae_loocv]
+    # all_data = [proposed_epilepsiae_unseen, bvib_epilepsiae_unseen, bmmd_epilepsiae_unseen,
+    #             bfcn_epilepsiae_unseen, bfet_epilepsiae_unseen]
+    all_data = [proposed_chb_loocv, bvib_chb_loocv, bmmd_chb_loocv,
+                bfcn_chb_loocv, bfet_chb_loocv]
+    # all_data = [proposed_chb_unseen, bvib_chb_unseen, bmmd_chb_unseen,
+    #             bfcn_chb_unseen, bfet_chb_unseen]
+    labels = ['Proposed', 'B-VIB', 'B-MMD', 'B-FCN', 'B-FET']
 
-    fig, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(10, 6))
+    fig, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(5, 6))
+    fig.tight_layout()
 
     # rectangular box plot
     bplot1 = ax1.boxplot(all_data,
                          whis=[5, 95],
+                         widths= 0.7,
                          patch_artist=True,  # fill with color
                          boxprops=boxprops, medianprops=medianprops, capprops=capprops, flierprops=flierprops,
                          whiskerprops=capprops)  # will be used to label x-ticks
@@ -233,8 +241,10 @@ def plot_box():
     ax1.set_yticks(ticks=np.arange(0, 3601, step=600))
     ax1.set_yticklabels(labels=[" {}".format(str(i)) for i in np.arange(0, 61, step=10)],
                         fontsize=14)
-    ax1.set_xticklabels(labels=labels, fontsize=14)
-    plt.grid(axis='y')
+    ax1.set_xticklabels(labels=labels, fontsize=18, rotation=-90)
+    # ax1.set_aspect(1.5)
+    plt.grid(axis='y', color = 'black')
+    # ax1.set_facecolor('gainsboro')
 
     # notch shape box plot
     # bplot2 = ax1.boxplot(all_data,
@@ -245,12 +255,14 @@ def plot_box():
     # ax1.set_title('Notched box plot')
 
     # fill with colors
-    colors = ['pink', 'lightblue', 'lightgreen', 'navajowhite', 'b']
+    # colors = ['pink', 'lightblue', 'lightgreen', 'navajowhite', 'b']
+    # colors = ["#9b59b6", "#3498db", "#e74c3c", "#34495e", "#2ecc71"]
+    colors = ["#2596be", "#fdddc5", "#fbd3d1", "#bde1d1", "#858585"]
     for bplot in (bplot1, bplot1):
         for patch, color in zip(bplot['boxes'], colors):
             patch.set_facecolor(color)
     # plt.show()
-    plt.savefig('../../output/images/new_Epilepsiae_unseen.pdf', format='pdf')
+    plt.savefig('../../output/images/CHB_LOOCV_v3.pdf', format='pdf', bbox_inches='tight')
 
 
 def time_table():
