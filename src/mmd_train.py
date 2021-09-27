@@ -1,3 +1,5 @@
+import pprint
+
 import numpy as np
 import os
 from utils import vae_model
@@ -15,6 +17,7 @@ from training import get_all_filenames
 from vae_mmd import plot_mmd
 from utils.params import pat_list
 import datetime
+import sys
 
 LOG = logging.getLogger(os.path.basename(__file__))
 ch = logging.StreamHandler()
@@ -29,63 +32,64 @@ STATE_LEN = 899
 LATENT_DIM = 32
 
 
-def train_model(latent):
+def train_model(test_id):
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_s{}_max4_v109".format(SEG_LENGTH, arch, latent)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/23channel_v113".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
     middle_diff = []
-    # all_filenames = get_all_filenames(entire_dataset=False)
-    input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
+    all_filenames = get_all_filenames(entire_dataset=False, full_channel=True)
+    # input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
 
-    for test_id in ["-1"]:  # ["-1"]:  # range(30):  # range(1,24):
+    # for test_id in range(2,24):  # ["-1"]:  # range(30):  # range(1,24):
         # test_patient = pat_list[test_id]
-        test_patient = test_id
-        # test_patient = str(test_id)
-        # train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
-        train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN, state_len=40)
-        # val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
-        val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN, state_len=40)
-        print("Shape :{}".format(train_data.shape))
-        print("Shape :{}".format(train_label.shape))
-        # train_data = np.clip(train_data, a_min=-10, a_max=10)
-        # val_data = np.clip(val_data, a_min=-10, a_max=10)
+        # test_patient = test_id
+    test_patient = str(test_id)
+    train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+    # train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN, state_len=40)
+    # val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+    # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN, state_len=40)
+    print("Shape :{}".format(train_data.shape))
+    print("Shape :{}".format(train_label.shape))
+    # train_data = np.clip(train_data, a_min=-10, a_max=10)
+    # val_data = np.clip(val_data, a_min=-10, a_max=10)
 
-        # train_data = np.reshape(train_data, newshape=(-1, 1024, 2))
-        # train_label = np.reshape(train_label, newshape=(-1, 1))
-        # val_data = np.reshape(val_data, newshape=(-1, 1024, 2))
-        # val_label = np.reshape(val_label, newshape=(-1, 1))
+    # train_data = np.reshape(train_data, newshape=(-1, 1024, 2))
+    # train_label = np.reshape(train_label, newshape=(-1, 1))
+    # val_data = np.reshape(val_data, newshape=(-1, 1024, 2))
+    # val_label = np.reshape(val_label, newshape=(-1, 1))
 
 
-        # load the model
-        vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=latent, signal_len=SEG_LENGTH,
-                                                seq_len=None, trainable_vae=True)
+    # load the model
+    vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
+                                            seq_len=None, trainable_vae=True)
 
-        print(vae_mmd_model.summary())
+    print(vae_mmd_model.summary())
 
-        # load the weights in the convolution layer
-        conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
-        vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
+    # load the weights in the convolution layer
+    conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
+    vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
-        history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
+    history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='binary_crossentropy')
+    vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='binary_crossentropy')
 
-        BCE = tf.keras.losses.BinaryCrossentropy()
-        bce_train = []
-        bce_val = []
+    BCE = tf.keras.losses.BinaryCrossentropy()
+    bce_train = []
+    bce_val = []
 
-        savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
-        if not os.path.exists(savedir):
-            os.makedirs(savedir)
+    savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
 
-        vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=[val_data, val_label], batch_size=1, epochs=60)
+    vae_mmd_model.fit(x=train_data, y=train_label,
+                      # validation_data=[val_data, val_label],
+                      batch_size=1, epochs=30)
 
-        diffs = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname, dataset='Epilepsiae')
-        middle_diff += diffs
-        vae_mmd_model.save(savedir)
+    # diffs = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname, dataset='Epilepsiae')
+    # middle_diff += diffs
+    vae_mmd_model.save(savedir)
     # plt.figure()
     # plt.hist(middle_diff)
     # plt.savefig("{}/hist_diff.png".format(subdirname))
@@ -130,19 +134,22 @@ def inference(test_patient:int, trained_model, subdirname:str, dataset='CHB'):
 
         # Add non seizure signal as the initialization of the states
         X_section = np.expand_dims(X, 0)
-        X_edge = non_seizure_dataset(test_patient, state_len=STATE_LEN)
-        concatenated = np.concatenate((X_edge, X_section, X_edge), axis=1)
-        X_section = concatenated
+        # X_edge = non_seizure_dataset(test_patient, state_len=STATE_LEN)
+        # concatenated = np.concatenate((X_edge, X_section, X_edge), axis=1)
+        # X_section = concatenated
         # X_section = np.clip(X_section, a_min=-10, a_max=10)
 
         mmd_predicted = vae_mmd_model.predict(X_section)
 
         # Remove the non seizure signal to compute the MMD
-        mmd_edge_free = mmd_predicted[:, STATE_LEN:-STATE_LEN, :]
+        # mmd_edge_free = mmd_predicted[:, STATE_LEN:-STATE_LEN, :]
+        mmd_edge_free = mmd_predicted
         mmd_maximum = [np.argmax(mmd_edge_free)]
         name = "{}".format(node)
+        y_true = np.squeeze(y_true)
         plot_mmd(mmd_edge_free[0, :, 0], mmd_maximum, y_true, name, subdirname)
 
+        # pprint.pprint(y_true)
         seizure_points = get_seizure_point_from_label(y_true)
 
         t_diff = np.abs(seizure_points - mmd_maximum[0])
@@ -155,12 +162,12 @@ def get_results():
     """
     This method is only for evaluation a saved model
     """
-    arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_s16_v105".format(SEG_LENGTH, arch)
+    arch = '23channel'
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v1".format(SEG_LENGTH, arch)
     diffs = []
-    for pat_id in pat_list:
+    for pat_id in range(1,24):
         pat = pat_id
-        diff_pat= inference(pat, None, subdirname, dataset='Epilepsiae')
+        diff_pat= inference(pat, None, subdirname, dataset='CHB')
         diffs += diff_pat
     print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
     diffs_minute = [x / 15.0 for x in diffs]
@@ -198,7 +205,8 @@ def across_dataset():
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
     # for latent in [16, 32, 64]:
-    #     train_model(latent)
-    # get_results()
-    across_dataset()
+    # test_pat = int(sys.argv[1])
+    # train_model(test_pat)
+    get_results()
+    # across_dataset()
 #

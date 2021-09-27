@@ -1,8 +1,11 @@
+import logging
+
 import numpy as np
 import pickle
 import pandas as pd
 import os
 from utils.params import SEG_N
+from sklearn.preprocessing import scale
 
 
 def dataset_training(mode, test_patient, all_filenames, max_len=899, state_len=300):
@@ -19,8 +22,20 @@ def dataset_training(mode, test_patient, all_filenames, max_len=899, state_len=3
             y = np.array(data["y"])
             if np.sum(y) == 0:
                 continue
-            seizure_len.append(np.sum(y))
-            y = np.expand_dims(y, -1)
+            x_reshaped = []
+            y_reshaped = []
+            x = np.clip(x, a_min=-250, a_max=250)
+            x = scale(x, axis=0)
+            for ix in range(SEG_N, x.shape[0], SEG_N):
+                Xw = x[ix - SEG_N:ix, :]
+                yw = 0 if np.sum(y[ix - SEG_N:ix]) == 0 else 1
+                x_reshaped.append(Xw)
+                y_reshaped.append(yw)
+
+            x = np.array(x_reshaped)
+            print("shape {}".format((x.shape)))
+            seizure_len.append(np.sum(y_reshaped))
+            y = np.expand_dims(y_reshaped, -1)
             if x.shape[0] == max_len:
                 x_selected = x
                 y_selected = y
@@ -215,6 +230,7 @@ def get_seizure_point_from_label(y_true):
     y_diff = np.diff(y_non_zero)
     start_points = np.where(y_diff > 0)[0]
     stop_points = np.where(y_diff < 0)[0]
+    print("START : {}, STOP : {}".format(start_points, stop_points))
 
     accepted_points = []
     for start, stop in zip(start_points, stop_points):
@@ -225,7 +241,7 @@ def get_seizure_point_from_label(y_true):
 def build_dataset_pickle(test_patient, root='..'):
     dataset = {}
     for mode in ["train" , "valid"]:
-        dirname = "{}/temp/vae_mmd_data/{}/full_normal/{}".format(root, SEG_N, mode)
+        dirname = "{}/temp/vae_mmd_data/23channel/{}".format(root, mode)
         filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if x.startswith("chb{:02d}".format(test_patient))]
         for filename in filenames:
             with open(filename, "rb") as pickle_file:
@@ -234,6 +250,21 @@ def build_dataset_pickle(test_patient, root='..'):
                 data = pickle.load(pickle_file)
                 x = np.array(data["X"])
                 y = np.array(data["y"])
+
+                x_reshaped = []
+                y_reshaped = []
+                x = np.clip(x, a_min=-250, a_max=250)
+                x = scale(x, axis=0)
+                for ix in range(SEG_N, x.shape[0], SEG_N):
+                    Xw = x[ix - SEG_N:ix, :]
+                    yw = 0 if np.sum(y[ix - SEG_N:ix]) == 0 else 1
+                    x_reshaped.append(Xw)
+                    y_reshaped.append(yw)
+
+                x = np.array(x_reshaped)
+                print("shape {}".format((x.shape)))
+                y = np.expand_dims(y_reshaped, -1)
+
                 dataset[name] = {'data': x, 'label': y}
 
     return dataset

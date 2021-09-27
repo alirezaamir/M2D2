@@ -188,16 +188,19 @@ def get_data_len(filenames):
     return total_len
 
 
-def get_all_filenames(entire_dataset=False):
+def get_all_filenames(entire_dataset=False, full_channel = False):
     all_filenames = {'train': {}, 'valid': {}}
     for mode in 'train', 'valid':
-        dirname = "../temp/vae_mmd_data/{}/full_normal/{}".format(SEG_N, mode)
+        if full_channel:
+            dirname = "../temp/vae_mmd_data/23channel/{}".format(mode)
+        else:
+            dirname = "../temp/vae_mmd_data/{}/full_normal/{}".format(SEG_N, mode)
         if entire_dataset:
             filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname)]
             all_filenames[mode]['-1'] = filenames
             continue
         else:
-            for test_patient in range(1, 25):
+            for test_patient in range(1, 24):
                 filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if not
                 x.startswith("chb{:02d}".format(test_patient))]
                 all_filenames[mode][str(test_patient)] = filenames
