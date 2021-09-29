@@ -13,7 +13,7 @@ def get_FCN_model(state_len=None,
                   signal_len=None,
                   seq_len = None,
                   trainable_vae=True):
-    input_signal = tf.keras.layers.Input(shape=(signal_len, 2))
+    input_signal = tf.keras.layers.Input(shape=(signal_len, 23))
     x = input_signal
     x = layers.Conv1D(128, 3, padding="same", activation=None,
                                              kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4))(x)

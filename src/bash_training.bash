@@ -1,6 +1,6 @@
 #!/bin/bash
-for pat in {1..23}
+for pat in {8..23}
 do
-  ech $pat
+  echo $pat
 	python mmd_train.py $pat
 done

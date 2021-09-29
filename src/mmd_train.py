@@ -33,8 +33,8 @@ LATENT_DIM = 32
 
 
 def train_model(test_id):
-    arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/23channel_v113".format(SEG_LENGTH, arch)
+    arch = '23channel'
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v10".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -51,6 +51,9 @@ def train_model(test_id):
     # val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
     # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN, state_len=40)
     print("Shape :{}".format(train_data.shape))
+    train_data = np.reshape(train_data, newshape=(-1, 1024,23))
+    print("Shape :{}".format(train_data.shape))
+    train_label = np.reshape(train_label, newshape=(-1,))
     print("Shape :{}".format(train_label.shape))
     # train_data = np.clip(train_data, a_min=-10, a_max=10)
     # val_data = np.clip(val_data, a_min=-10, a_max=10)
@@ -62,18 +65,18 @@ def train_model(test_id):
 
 
     # load the model
-    vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
+    vae_mmd_model = vae_model.get_FCN_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                             seq_len=None, trainable_vae=True)
 
     print(vae_mmd_model.summary())
 
     # load the weights in the convolution layer
-    conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
-    vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
+    # conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
+    # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
     history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
-    vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='binary_crossentropy')
+    vae_mmd_model.compile(optimizer=tf.keras.optimizers.SGD(), loss='binary_crossentropy')
 
     BCE = tf.keras.losses.BinaryCrossentropy()
     bce_train = []
@@ -85,7 +88,7 @@ def train_model(test_id):
 
     vae_mmd_model.fit(x=train_data, y=train_label,
                       # validation_data=[val_data, val_label],
-                      batch_size=1, epochs=30)
+                      batch_size=32, epochs=40)
 
     # diffs = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname, dataset='Epilepsiae')
     # middle_diff += diffs
@@ -133,13 +136,14 @@ def inference(test_patient:int, trained_model, subdirname:str, dataset='CHB'):
             continue
 
         # Add non seizure signal as the initialization of the states
-        X_section = np.expand_dims(X, 0)
+        # X_section = np.expand_dims(X, 0)
         # X_edge = non_seizure_dataset(test_patient, state_len=STATE_LEN)
         # concatenated = np.concatenate((X_edge, X_section, X_edge), axis=1)
         # X_section = concatenated
         # X_section = np.clip(X_section, a_min=-10, a_max=10)
 
-        mmd_predicted = vae_mmd_model.predict(X_section)
+
+        mmd_predicted = vae_mmd_model.predict(X)
 
         # Remove the non seizure signal to compute the MMD
         # mmd_edge_free = mmd_predicted[:, STATE_LEN:-STATE_LEN, :]
@@ -147,7 +151,7 @@ def inference(test_patient:int, trained_model, subdirname:str, dataset='CHB'):
         mmd_maximum = [np.argmax(mmd_edge_free)]
         name = "{}".format(node)
         y_true = np.squeeze(y_true)
-        plot_mmd(mmd_edge_free[0, :, 0], mmd_maximum, y_true, name, subdirname)
+        plot_mmd(mmd_edge_free[:, 0], mmd_maximum, y_true, name, subdirname)
 
         # pprint.pprint(y_true)
         seizure_points = get_seizure_point_from_label(y_true)
@@ -163,7 +167,7 @@ def get_results():
     This method is only for evaluation a saved model
     """
     arch = '23channel'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v1".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v10".format(SEG_LENGTH, arch)
     diffs = []
     for pat_id in range(1,24):
         pat = pat_id
@@ -203,7 +207,7 @@ def across_dataset():
 
 
 if __name__ == "__main__":
-    tf.config.experimental.set_visible_devices([], 'GPU')
+    # tf.config.experimental.set_visible_devices([], 'GPU')
     # for latent in [16, 32, 64]:
     # test_pat = int(sys.argv[1])
     # train_model(test_pat)
