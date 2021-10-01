@@ -127,11 +127,11 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    source_arch = 'epilepsiae'
+    source_arch = 'vae_unsupervised'
     test_arch = 'Epilepsiae_loocv'
     beta = 1e-05
     latent_dim = 16
-    lr = 1e-05
+    lr = 0.0001
     decay = 0.5
     gamma = 0.0
 
@@ -163,80 +163,82 @@ def main():
     middle_diff = []
     z_dict = {}
     # for test_patient in range(1,25):
-    J_list = {}
-    for pat_id in range(1,24):#pat_list:#range(1,25):
-        # test_patient = pat_list[pat_id]
-        source_pat = -1
-        sessions = build_dataset_pickle(test_patient=pat_id)
-        # sessions = (test_patient=test_patient)
-
-        # Load the specific weights for the model
+    total_mean = []
+    for source_pat in range(1,24):
+        J_list = {}
         dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma, source_pat)
         if not os.path.exists(dirname):
             print("Model does not exist in {}".format(dirname))
             exit()
         model.load_weights(dirname)
         intermediate_model = tf.keras.models.Model(inputs=model.inputs, outputs=model.layers[1].output)
+        for pat_id in pat_list:#pat_list:#range(1,25):
+            # test_patient = pat_list[pat_id]
+            sessions = get_epilepsiae_test(test_patient=pat_id)
+            # sessions = (test_patient=test_patient)
 
-        for node in sessions.keys():   # Loop2: nodes in the dataset
-            # patient_num = node.split('_')
-            # node_id = "pat_{}".format(patient_num[1])
-            # print("node: {}".format(node_id))
-            # print("pat id: {}".format(pat_id))
-            # if node_id == pat_id:
-            #     print("Equal file : {}".format(node))
-            #     continue
+            # Load the specific weights for the model
+            for node in sessions.keys():   # Loop2: nodes in the dataset
+                # patient_num = node.split('_')
+                # node_id = "pat_{}".format(patient_num[1])
+                # print("node: {}".format(node_id))
+                # print("pat id: {}".format(pat_id))
+                # if node_id == pat_id:
+                #     print("Equal file : {}".format(node))
+                #     continue
 
-            LOG.info("session name: {}".format(pat_id))
-            X = sessions[node]['data']
-            LOG.info("session number: {}".format(len(X)))
-            y_true = sessions[node]['label']
+                LOG.info("session name: {}".format(pat_id))
+                X = sessions[node]['data']
+                LOG.info("session number: {}".format(len(X)))
+                y_true = sessions[node]['label']
 
-            if np.sum(y_true) == 0:
+                if np.sum(y_true) == 0:
+                    continue
+
+                LOG.info("Session {}\nmean:{}, std: {}".format(node, np.mean(X), np.std(X)))
+
+                latent = intermediate_model.predict(X)[2]
+                # z_dict[node] = latent
+                # print("Z space {} : {}".format(node, latent.shape))
+                print("y true: {}".format(y_true.shape))
+                Sb, Sw, J = get_within_between(latent, y_true)
+                J_list[node] = J
                 continue
 
-            LOG.info("Session {}\nmean:{}, std: {}".format(node, np.mean(X), np.std(X)))
+                K = kernel(latent)
+                mmd_maximum, mmd = get_changing_points(K, 1)
+                LOG.info("mmd maximum : {}".format(mmd_maximum))
+                print("MMD shape: {}\ny shape:{}".format(mmd.shape, y_true.shape))
+                y_true = y_true[interval_len: -interval_len]
+                plot_mmd(mmd, mmd_maximum, y_true, node, subdirname)
 
-            latent = intermediate_model.predict(X)[2]
-            # z_dict[node] = latent
-            # print("Z space {} : {}".format(node, latent.shape))
-            print("y true: {}".format(y_true.shape))
-            # Sb, Sw, J = get_within_between(latent, y_true)
-            # J_list[node] = J
-            # continue
+                y_non_zero = np.where(y_true > 0, 1, 0)
+                y_non_zero = np.concatenate((y_non_zero, [0]))
+                # For sections which have seizure at the end or start of the section
+                y_non_zero = np.concatenate(([0], y_non_zero,))
 
-            K = kernel(latent)
-            mmd_maximum, mmd = get_changing_points(K, 1)
-            LOG.info("mmd maximum : {}".format(mmd_maximum))
-            print("MMD shape: {}\ny shape:{}".format(mmd.shape, y_true.shape))
-            y_true = y_true[interval_len: -interval_len]
-            plot_mmd(mmd, mmd_maximum, y_true, node, subdirname)
+                y_diff = np.diff(y_non_zero)
+                start_points = np.where(y_diff > 0)[0]
+                stop_points = np.where(y_diff < 0)[0]
+                LOG.info("points: {}, {}".format(start_points, stop_points))
+                accepted_points = []
+                for start, stop in zip(start_points, stop_points):
+                    accepted_points += range(start, stop)
+                middle_points = (start_points + stop_points) // 2
+                LOG.info("start: {}, stop: {}\npoints: {}".format(start_points, stop_points, accepted_points))
 
-            y_non_zero = np.where(y_true > 0, 1, 0)
-            y_non_zero = np.concatenate((y_non_zero, [0]))
-            # For sections which have seizure at the end or start of the section
-            y_non_zero = np.concatenate(([0], y_non_zero,))
+                t_diff = np.abs(accepted_points - mmd_maximum[0])
 
-            y_diff = np.diff(y_non_zero)
-            start_points = np.where(y_diff > 0)[0]
-            stop_points = np.where(y_diff < 0)[0]
-            LOG.info("points: {}, {}".format(start_points, stop_points))
-            accepted_points = []
-            for start, stop in zip(start_points, stop_points):
-                accepted_points += range(start, stop)
-            middle_points = (start_points + stop_points) // 2
-            LOG.info("start: {}, stop: {}\npoints: {}".format(start_points, stop_points, accepted_points))
+                LOG.info("Time diff : {}".format(t_diff))
+                if len(t_diff) >0 :
+                    middle_diff.append(np.min(t_diff))
 
-            t_diff = np.abs(accepted_points - mmd_maximum[0])
-
-            LOG.info("Time diff : {}".format(t_diff))
-            if len(t_diff) >0 :
-                middle_diff.append(np.min(t_diff))
-
-    # with open("../output/z_16.pickle", "wb") as pickle_file:
-    #     pickle.dump(z_dict, pickle_file)
-
+        # with open("../output/z_16.pickle", "wb") as pickle_file:
+        #     pickle.dump(z_dict, pickle_file)
+        total_mean.append(np.array(list(J_list.values())).mean())
+    print("Total Mean : {}".format(total_mean))
     print("J s: {}".format(J_list))
+    print(np.array(list(J_list.values())).mean())
     print(middle_diff)
     plt.figure()
     plt.hist(middle_diff)

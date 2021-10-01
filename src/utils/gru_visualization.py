@@ -12,7 +12,7 @@ from sklearn.metrics import roc_curve, auc, accuracy_score, f1_score
 from utils.params import pat_list
 import json
 
-STATE_LEN = 899
+STATE_LEN = 1
 
 
 def get_PCA_plotly(X, y, name):
@@ -91,9 +91,11 @@ def load_model(test_patient, latent, num):
     arch = 'vae_free'
 
     # subdirname = "../../temp/vae_mmd/integrated/{}/{}/Anthony_v53".format(1024, arch)
-    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v72".format(1024, arch)
+    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/Epilepsiae_BVIB_v63".format(1024, arch)
+    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(1024, arch)
+    subdirname = "../../temp/vae_mmd/integrated/{}/{}/Epilepsiae_v62".format(1024, arch)
     # subdirname = "../../temp/vae_mmd/integrated/{}/{}/iterations_v62".format(1024, arch)
-    subdirname = "../../temp/vae_mmd/integrated/{}/{}/proposed_l32_v70".format(1024, arch)
+    # subdirname = "../../temp/vae_mmd/integrated/{}/{}/proposed_l32_v70".format(1024, arch)
     # subdirname = "../../temp/vae_mmd/integrated/{}/{}/proposed_l{}_n{}_v62".format(1024, arch, 32, 3)
     save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
     trained_model = tf.keras.models.load_model(save_path, compile=False)
@@ -101,19 +103,20 @@ def load_model(test_patient, latent, num):
     intermediate_model = tf.keras.models.Model(inputs=trained_model.input,
                                                outputs=[
                                                    trained_model.output,
+                                                   trained_model.get_layer('MMD').input])
                                                    # trained_model.get_layer('dense1').input])
                                                    # trained_model.get_layer('latents').input])
-                                                   trained_model.get_layer('conv_interval').output])
+                                                   # trained_model.get_layer('conv_interval').output])
     return intermediate_model
 
 
 def predict_(test_patient, model):
-    sessions = get_epilepsiae_test(test_patient, root='../../')
+    sessions = test_dataset(test_patient, root='../../')
     out_list = np.zeros(0)
     true_list = np.zeros(0)
     J_dict = {}
 
-    for node in ['pat_109502_142']:#sessions.keys():
+    for node in sessions.keys():
         X = sessions[node]['data']
         y_true = sessions[node]['label']
 
@@ -125,15 +128,17 @@ def predict_(test_patient, model):
         y_true_section = y_true #[:256 * minutes * 60]
 
         X_section = np.expand_dims(X_section, 0)
-        X_edge = get_epilepsiae_non_seizure(test_patient, state_len=STATE_LEN, root='../..')
-        X_section = np.concatenate((X_edge, X_section, X_edge), axis=1)
+        # X_edge = get_non_seizure_signal(test_patient, state_len=STATE_LEN, root='../..')
+        # X_section = np.concatenate((X_edge, X_section, X_edge), axis=1)
 
         X_20min = np.reshape(X, newshape=(-1, 2))# [:256 * minutes * 60]
         t = np.linspace(0, minutes, X_20min.shape[0])
 
         out, z = model.predict(X_section)
-        z = z[0, STATE_LEN:-STATE_LEN, :]
-        out = out[0, STATE_LEN:-STATE_LEN, 0]
+        # z = z[0, STATE_LEN:-STATE_LEN, :]
+        # out = out[0, STATE_LEN:-STATE_LEN, 0]
+        z = z[0, :, 0, :]
+        out = out[0, :, 0]
 
         # plt.figure(figsize=(15,6))
         # plt.plot(t, 0.35 * (X_20min[:, 0]) + 12, linewidth=0.3, c='dimgray')
@@ -167,7 +172,7 @@ def predict_(test_patient, model):
         # plt.close()
 
         Sb, Sw, J = get_within_between(z, y_true)
-        print("{}, Sw: {}, Sb: {}, J: {}".format(node, Sw, Sb, J))
+        # print("{}, Sw: {}, Sb: {}, J: {}".format(node, Sw, Sb, J))
         J_dict[node] = J
         # out = out[0, STATE_LEN:-STATE_LEN]
         # mmd_argmax = np.argmax(out)
@@ -175,7 +180,7 @@ def predict_(test_patient, model):
         # out_list = np.concatenate((out_list, out))
         # true_list = np.concatenate((true_list, y_true))
 
-        get_PCA(z, y_true_section, 0, node)
+        # get_PCA(z, y_true_section, 0, node)
         # for idx in range(9):
         #     subdirname = "../../output/Conv/"
         #     mmd_edge_free = mmd_predicted[0, STATE_LEN:-STATE_LEN, idx]
@@ -381,10 +386,11 @@ def plot_J():
 
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    test_pat = 'pat_109502'
+    # test_pat = 'pat_109502'
     # test_pat = 12
-    model = load_model(-1, 0, 0)
-    predict_(test_pat, model)
+    # model = load_model(test_pat, 0, 0)
+    # _, _, J =predict_(test_pat, model)
+    # print(J)
     # auc_list = []
     # out_all = np.zeros(0)
     # true_all = np.zeros(0)
@@ -407,15 +413,21 @@ if __name__ == "__main__":
     # J_l_num = []
     # for l in [4, 8, 16, 32, 64]:
     #     max_num = 6 if l < 10 else 4
-    #     for num in range(max_num):
-    #         model = load_model(-1, l, num)
-    #         J_list = {}
-    #         for test_pat in pat_list:
-    #             out, true, J = predict_(test_pat, model)
-    #             J_list.update(J)
-    #         print("Latent : {}\nJ : {}".format(l, J_list))
-    #         J_mean = np.mean(list(J_list.values()))
-    #         J_l_num.append(J_mean)
-    # print(J_l_num)
+    total_j = []
+    total_mean = []
+    for train_pat in pat_list:
+        model = load_model(train_pat, 0, 0)
+        J_list = {}
+        for test_pat in range(1, 24):
+            out, true, J = predict_(test_pat, model)
+            J_list.update(J)
+            # print("Latent : {}\nJ : {}".format(test_pat, J_list))
+        #         J_mean = np.mean(list(J_list.values()))
+        #         J_l_num.append(J_mean)
+        print(J_list)
+        total_j.append(J_list)
+        total_mean.append(np.array(list(J_list.values())).mean())
+    print(total_j)
+    print("Mean : {}".format(total_mean))
 
     # plot_J()

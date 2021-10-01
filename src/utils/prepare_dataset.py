@@ -157,16 +157,17 @@ def epilepsiae_seizures():
                 data = np.transpose(data)
                 X_normal = np.asarray(data)
 
-                out_filename = "{}/{}.pickle".format(dirname, filename)
-                output_dict = {"X": [], "y": []}
-                with open(out_filename, 'wb') as pickle_file:
-                    for ix in range(window_size, X_normal.shape[0], window_size):
-                        Xw = X_normal[ix - window_size:ix, :]
-                        y = 0 if np.sum(dfs.Var2[ix - window_size:ix]) == 0 else 1
-                        output_dict["X"].append(Xw)
-                        output_dict["y"].append(y)
-                    print("Filename: {}, X shape:{}".format(filename, np.array(output_dict["X"]).shape))
-                    pickle.dump(output_dict, pickle_file)
+                for overlap in range(8):
+                    out_filename = "{}/{}_{}.pickle".format(dirname, filename, overlap)
+                    output_dict = {"X": [], "y": []}
+                    with open(out_filename, 'wb') as pickle_file:
+                        for ix in range(window_size + 128*overlap, X_normal.shape[0], window_size):
+                            Xw = X_normal[ix - window_size:ix, :]
+                            y = 0 if np.sum(dfs.Var2[ix - window_size:ix]) == 0 else 1
+                            output_dict["X"].append(Xw)
+                            output_dict["y"].append(y)
+                        print("Filename: {}, X shape:{}".format(filename, np.array(output_dict["X"]).shape))
+                        pickle.dump(output_dict, pickle_file)
 
 
 def epilepsiae2pickle(test_patient, root):
@@ -214,6 +215,6 @@ def epilepsiae2pickle(test_patient, root):
 
 if __name__ == '__main__':
     # main()
-    # epilepsiae_seizures()
-    for pat in pat_list:
-        epilepsiae2pickle(pat, root='../..')
+    epilepsiae_seizures()
+    # for pat in pat_list:
+    #     epilepsiae2pickle(pat, root='../..')

@@ -241,7 +241,7 @@ def get_seizure_point_from_label(y_true):
 def build_dataset_pickle(test_patient, root='..'):
     dataset = {}
     for mode in ["train" , "valid"]:
-        dirname = "{}/temp/vae_mmd_data/23channel/{}".format(root, mode)
+        dirname = "{}/temp/vae_mmd_data/1024/full_normal/{}".format(root, mode)
         filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if x.startswith("chb{:02d}".format(test_patient))]
         for filename in filenames:
             with open(filename, "rb") as pickle_file:
@@ -251,19 +251,19 @@ def build_dataset_pickle(test_patient, root='..'):
                 x = np.array(data["X"])
                 y = np.array(data["y"])
 
-                x_reshaped = []
-                y_reshaped = []
-                x = np.clip(x, a_min=-250, a_max=250)
-                x = scale(x, axis=0)
-                for ix in range(SEG_N, x.shape[0], SEG_N):
-                    Xw = x[ix - SEG_N:ix, :]
-                    yw = 0 if np.sum(y[ix - SEG_N:ix]) == 0 else 1
-                    x_reshaped.append(Xw)
-                    y_reshaped.append(yw)
-
-                x = np.array(x_reshaped)
-                print("shape {}".format((x.shape)))
-                y = np.expand_dims(y_reshaped, -1)
+                # x_reshaped = []
+                # y_reshaped = []
+                # x = np.clip(x, a_min=-250, a_max=250)
+                # x = scale(x, axis=0)
+                # for ix in range(SEG_N, x.shape[0], SEG_N):
+                #     Xw = x[ix - SEG_N:ix, :]
+                #     yw = 0 if np.sum(y[ix - SEG_N:ix]) == 0 else 1
+                #     x_reshaped.append(Xw)
+                #     y_reshaped.append(yw)
+                #
+                # x = np.array(x_reshaped)
+                # print("shape {}".format((x.shape)))
+                # y = np.expand_dims(y_reshaped, -1)
 
                 dataset[name] = {'data': x, 'label': y}
 

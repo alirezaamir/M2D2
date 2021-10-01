@@ -111,7 +111,7 @@ def get_mmd_model(state_len=None,
                   signal_len=None,
                   seq_len = None,
                   trainable_vae=True):
-    input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 23))
+    input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 2))
     x = input_signal
     num_conv_layers = 3
     for i in range(num_conv_layers):
