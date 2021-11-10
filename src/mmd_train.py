@@ -38,11 +38,11 @@ BITS = 8
 
 def train_model():
     arch = '23channel'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v5".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_pre_pruned".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
-    for test_id in range(22, 23):  # ["-1"]:  # range(30):  # range(1,24):
+    for test_id in [1, 21, 22]:  # ["-1"]:  # range(30):  # range(1,24):
         # load the model
         vae_mmd_model = vae_model.get_FCN_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
@@ -57,11 +57,11 @@ def train_model():
 
         for iter in range(200):
             try:
-                train_data, train_label = get_balanced_data(test_id, ictal_ratio=0.03, inter_ratio=0.03, non_ratio=0.02)
+                train_data, train_label = get_balanced_data(test_id, ictal_ratio=0.03, inter_ratio=0.02, non_ratio=0.02)
                 train_data = np.clip(train_data, a_min=-250, a_max=250)
                 train_data = train_data / 250
                 vae_mmd_model.fit(x=train_data, y=tf.keras.utils.to_categorical(train_label, 2), batch_size=32,
-                                  initial_epoch= iter*5, epochs=(iter+1)*5)
+                                  initial_epoch= iter*5, epochs=(iter+1)*4)
                 del train_data, train_label
                 # test_data, test_label = get_test_data(test_id)
                 # eval = vae_mmd_model.evaluate(x=test_data, y=tf.keras.utils.to_categorical(test_label))
@@ -126,13 +126,13 @@ def inference(test_patient:int, trained_model, subdirname:str, dataset='CHB'):
     :return: int[], distances from the seizure for every sessions
     """
 
-    X_test, y_test = get_non_seizure(test_patient)
+    X_test, y_test = get_test_overlapped(test_patient)
     X_test = np.clip(X_test, a_min=-250, a_max=250)
     X_test = X_test/250
 
     # Load the trained model
     if trained_model is None:
-        save_path = '{}/model/q_8_test_{}/saved_model/'.format(subdirname, test_patient)
+        save_path = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
         trained_model = tf.keras.models.load_model(save_path)
         vae_mmd_model = trained_model
     else:
@@ -156,10 +156,10 @@ def get_results():
     This method is only for evaluation a saved model
     """
     arch = '23channel'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_v1".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_pre_pruned".format(SEG_LENGTH, arch)
     conf_mat = [[0, 0],[0, 0]]
     f1_scores =[]
-    for pat_id in range(1, 24):
+    for pat_id in [1,21,22]:
         pat = pat_id
         pat_conf_mat, f1 = inference(pat, None, subdirname, dataset='CHB')
         conf_mat = np.add(conf_mat, pat_conf_mat)
@@ -195,8 +195,8 @@ def across_dataset():
 
 if __name__ == "__main__":
     # tf.config.experimental.set_visible_devices([], 'GPU')
-    train_model()
-    # get_results()
+    # train_model()
+    get_results()
     # across_dataset()
     # retrain_model()
 
