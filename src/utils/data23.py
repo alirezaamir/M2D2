@@ -92,14 +92,16 @@ def get_balanced_data(test_patient, ictal_ratio = 1.0, inter_ratio =1.0, non_rat
 
         for mode in ["ictal", "inter_ictal", "non_ictal"]:
             for i in range(10):
-                if np.random.rand() > ratio[mode]:
-                    continue
+                # if np.random.rand() > ratio[mode]:
+                #     continue
                 pickle_file = open("{}/{}/{}_{}.pickle".format(dir_path, mode, pat, i), "rb")
                 data = pickle.load(pickle_file)
-                x_total[mode] = np.concatenate((x_total[mode], data))
+                length = data.shape[0]
+                random_indices = np.random.choice(length, size=int(length * ratio[mode]), replace=False)
+                x_total[mode] = np.concatenate((x_total[mode], data[random_indices]))
                 pickle_file.close()
-        if x_total["ictal"].shape[0] +  x_total["inter_ictal"].shape[0]  + x_total["non_ictal"].shape[0] > 5000:
-            break
+        # if x_total["ictal"].shape[0] +  x_total["inter_ictal"].shape[0]  + x_total["non_ictal"].shape[0] > 5000:
+        #     break
 
     X = np.concatenate((x_total["ictal"], x_total["inter_ictal"], x_total["non_ictal"]), axis=0)
     label = np.concatenate((np.ones(x_total["ictal"].shape[0]),

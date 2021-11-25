@@ -24,7 +24,7 @@ def get_FCN_model(state_len=None,
 
     num_conv_layers = 2
     for idx in range(num_conv_layers):
-        x = layers.Conv1D(128 if idx == 0 else 64, 3, padding="same", activation=None,
+        x = layers.Conv1D(128, 3, padding="same", activation=None,
                                              kernel_regularizer=tf.keras.regularizers.l2(l2=1e-4))(pool)
         do = layers.Dropout(rate=0.1)(x)
         bn = layers.BatchNormalization()(do)

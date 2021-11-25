@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import gc
 from utils import vae_model
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
@@ -38,7 +39,7 @@ BITS = 8
 
 def train_model():
     arch = '23channel'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_pre_pruned".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_pruned_384_v3".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -49,26 +50,38 @@ def train_model():
 
         print(vae_mmd_model.summary())
 
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='categorical_crossentropy', metrics='accuracy')
+        vae_mmd_model.compile(optimizer=tf.keras.optimizers.Adam(), loss='categorical_crossentropy', metrics='accuracy')
 
         savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_id)
         if not os.path.exists(savedir):
             os.makedirs(savedir)
 
-        for iter in range(200):
+        logdir = '{}/log/test_{}/'.format(subdirname, test_id)
+        if not os.path.exists(logdir):
+            os.makedirs(logdir)
+
+        tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir, histogram_freq=1)
+
+        for iter in range(20):
             try:
-                train_data, train_label = get_balanced_data(test_id, ictal_ratio=0.03, inter_ratio=0.02, non_ratio=0.02)
-                train_data = np.clip(train_data, a_min=-250, a_max=250)
-                train_data = train_data / 250
-                vae_mmd_model.fit(x=train_data, y=tf.keras.utils.to_categorical(train_label, 2), batch_size=32,
-                                  initial_epoch= iter*5, epochs=(iter+1)*4)
+                train_data, train_label = get_balanced_data(test_id, ictal_ratio=0.1, inter_ratio=0.08, non_ratio=0.05)
+                test_data, test_label = get_test_data(test_id)
+                # train_data = np.clip(train_data, a_min=-250, a_max=250)
+                # train_data = train_data / 250
+                vae_mmd_model.fit(x=train_data,
+                                  y=tf.keras.utils.to_categorical(train_label, 2),
+                                  batch_size=32,
+                                  initial_epoch=iter*10,
+                                  epochs=(iter+1)*10,
+                                  validation_data=[test_data, tf.keras.utils.to_categorical(test_label, 2)],
+                                  callbacks=[tensorboard_callback])
                 del train_data, train_label
                 # test_data, test_label = get_test_data(test_id)
                 # eval = vae_mmd_model.evaluate(x=test_data, y=tf.keras.utils.to_categorical(test_label))
                 train_data = None
             except MemoryError:
                 print("Memory Error")
-                continue
+                gc.collect(generation=2)
 
         vae_mmd_model.save(savedir)
 
@@ -127,8 +140,8 @@ def inference(test_patient:int, trained_model, subdirname:str, dataset='CHB'):
     """
 
     X_test, y_test = get_test_overlapped(test_patient)
-    X_test = np.clip(X_test, a_min=-250, a_max=250)
-    X_test = X_test/250
+    # X_test = np.clip(X_test, a_min=-250, a_max=250)
+    # X_test = X_test/250
 
     # Load the trained model
     if trained_model is None:
@@ -156,7 +169,7 @@ def get_results():
     This method is only for evaluation a saved model
     """
     arch = '23channel'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_pre_pruned".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/FCN_pruned_384_v3".format(SEG_LENGTH, arch)
     conf_mat = [[0, 0],[0, 0]]
     f1_scores =[]
     for pat_id in [1,21,22]:
@@ -195,7 +208,7 @@ def across_dataset():
 
 if __name__ == "__main__":
     # tf.config.experimental.set_visible_devices([], 'GPU')
-    # train_model()
+    train_model()
     get_results()
     # across_dataset()
     # retrain_model()
