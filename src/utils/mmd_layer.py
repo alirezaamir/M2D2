@@ -43,11 +43,14 @@ class MMDLayer(tf.keras.layers.Layer):
         # Output
         tile_dim = tf.constant([1, self.state_len, 1], dtype=tf.int32)
         z_tile = tf.tile(z_t, tile_dim)
-        dot = tf.multiply(z_tile, d_t1)
-        sum = tf.reduce_sum(dot, axis=2)
-        gamma = tf.multiply(1/self.latent_dim, sum)
-        coeff = tf.add(1.0, gamma)
-        poly = tf.pow(coeff, 3)
+        dot = tf.subtract(z_tile, d_t1)
+        pow = tf.pow(dot, 2)
+        sum = tf.reduce_sum(pow, axis=2)
+        # gamma = tf.multiply(-1/self.latent_dim, sum)
+        # coeff = tf.add(1.0, gamma)
+        # poly = tf.pow(coeff, 5)
+        norm = tf.exp(-10*sum)
+        poly = norm
 
         inside0 = self.get_masked_sum(poly, 0)
         inside1 = self.get_masked_sum(poly, 1)
