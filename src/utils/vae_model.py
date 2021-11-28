@@ -131,8 +131,8 @@ def get_mmd_model(state_len=None,
     mmd = tf.keras.layers.Bidirectional(MMDLayer(state_len, latent_dim, mask_th=16, go_backwards=False), name='MMD')(z)
     interval = tf.keras.layers.Conv1D(filters=9, kernel_size=17, padding='same', use_bias=False, name='conv_interval',
                                       trainable=False)(mmd)
-    gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=25, return_sequences=True), name='GRU')(interval)
-    dense1 = tf.keras.layers.Dense(100, activation='relu', name='dense1')(gru)
+    # gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=25, return_sequences=True), name='GRU')(interval)
+    dense1 = tf.keras.layers.Dense(100, activation='relu', name='dense1')(interval)
     final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense1)
 
     model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)

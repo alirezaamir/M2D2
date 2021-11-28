@@ -31,7 +31,7 @@ LATENT_DIM = 32
 
 def train_model(latent):
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_rbf_10_v222".format(SEG_LENGTH, arch, latent)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_fc_only_v222".format(SEG_LENGTH, arch, latent)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -181,7 +181,7 @@ def get_results():
 
 def across_dataset():
     source_arch = 'vae_free'
-    source_model = 'Epilepsiae_rbf_10_v222'
+    source_model = 'Epilepsiae_fc_only_v222'
     # source_model = 'z_minus1_v62'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
