@@ -1,5 +1,6 @@
 #!/bin/bash
-for l in 2 4 8 16 32 64 128
+for l in {0..30}
 do
-	python training.py vae_unsup_chb 0.00001 $l 0.0001 0.02 0 -1
+  echo $l
+	python training.py vae_epil 0.0001 32 0.0001 0.5 0 $l
 done

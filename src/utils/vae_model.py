@@ -106,6 +106,58 @@ def build_VAE_model(input_shape=None,
     return model, encoder
 
 
+def build_ae_model(input_shape=None,
+                  enc_dimension=None,
+                  beta=None,
+                  gamma=None,
+                  optim=None,
+                  FS=None):
+    ii = layers.Input(shape=(input_shape))
+    x = ii
+    num_conv_layers = 3
+    for _ in range(num_conv_layers):
+        x = layers.Conv1D(8, 3, padding="same", activation="relu")(x)
+        x = layers.Conv1D(8, 3, padding="same", activation="relu")(x)
+        x = layers.MaxPooling1D(2)(x)
+
+    shape = K.int_shape(x)
+    x = layers.Flatten()(x)
+    z = layers.Dense(enc_dimension, activation="linear", name="z")(x)
+
+  #
+    y_true = layers.Input(shape=(1), name="true_label")
+    cl_dense1 = layers.Dense(enc_dimension, activation="relu", name="classifier_dense1")(z)
+    cl_dense2 = layers.Dense(1, activation='sigmoid', name="classifier_dense2")(cl_dense1)
+
+    q = layers.Dense(shape[1] * shape[2], activation="relu")(z)
+    q = layers.Reshape((shape[1], shape[2]))(q)
+
+
+    for _ in range(num_conv_layers):
+        q = layers.Conv1D(8, 3, padding="same", activation="relu")(q)
+        q = layers.UpSampling1D(size=2)(q)
+
+    dec_output = layers.Conv1D(
+            2, 3, padding="same", activation="linear", name="reconstruction")(q)
+    x_hat = dec_output
+
+    recons_cost = K.mean(losses.mse(ii, x_hat))
+
+    classification_cost = K.mean(losses.binary_crossentropy(y_true=y_true, y_pred=cl_dense2))
+
+    cost = recons_cost + 20 * classification_cost  # + beta*divergence + gamma*freq_cost
+
+    model = models.Model(inputs=[ii, y_true], outputs=x_hat)
+    model.add_loss(cost)
+    model.compile(optimizer=optim)
+    # encoder = models.Model(inputs=model.input, outputs=model.get_layer('z').output)
+
+    encoder = models.Model(inputs=model.input, outputs=model.get_layer('z').output)
+
+
+    return model, encoder
+
+
 def get_mmd_model(state_len=None,
                   latent_dim=None,
                   signal_len=None,

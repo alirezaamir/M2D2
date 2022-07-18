@@ -355,20 +355,23 @@ def classify_epilepsiae():
     print(middle_diff)
 
 
-def inference(test_patient):
-    rf = pickle.load(open("../test_code/model_{}.pickle".format(test_patient), "rb"))
-    features_dict = pickle.load(open("../test_code/Features_Eglass_chb.pickle", "rb"))
+def inference(test_patient, train_dataset, test_dataset = 'chb'):
+    rf = pickle.load(open("../test_code/models/{}/model_{}.pickle".format(train_dataset, test_patient), "rb"))
+    features_dict = pickle.load(open("../test_code/Features_Eglass_{}.pickle".format(test_dataset), "rb"))
 
-    # test_files = features_dict.keys()
-    test_files = [x for x in features_dict.keys() if x.startswith("chb{:02d}".format(test_patient))]
+    # if test_patient == -1:
+    test_files = features_dict.keys()  #
+    # else:
+    # test_files = [x for x in features_dict.keys() if x.startswith("chb{:02d}".format(test_patient))]
+        # test_files = [x for x in features_dict.keys() if x.startswith("{}".format(test_patient))]
 
     middle_diff = {}
     for pat_file in test_files:
         middle_diff[pat_file] = {}
-        for t_duration in [0, 4, 8, 15, 37, 75]:
+        for t_duration in [0]:#[0, 4, 8, 15, 37, 75]:
             start_remove = []
             stop_remove = []
-            for attempt in range(3):
+            for attempt in range(1):
                 test_data = features_dict[pat_file]['X']
                 np.nan_to_num(test_data, copy=False)
                 test_label = features_dict[pat_file]['y']
@@ -400,24 +403,31 @@ def inference(test_patient):
                 predict = rf.predict_proba(X_section)
                 rf_max = np.argmax(predict[:, 1])
 
-                start_detected_point = max(rf_max - t_duration, 0)
-                start_remove.append(start_detected_point)
-                stop_detected_point = min(rf_max + t_duration + 1, X_section.shape[0])
-                stop_remove.append(stop_detected_point)
+                node_diff = []
+                for idx in range(predict.shape[0]):
+                    t_diff = np.abs(np.subtract(accepted_points, idx))
+                    # LOG.info("Time diff : {}".format(np.min(t_diff)))
+                    node_diff.append((predict[idx, 1], np.min(t_diff)))
+                middle_diff[pat_file] = node_diff
 
-                t_diff = np.abs(accepted_points - rf_max)
-                print("Pat : {}_ t{} _ n{} - Time diff: {} ".format(pat_file, t_duration, attempt, np.min(t_diff)))
+                # start_detected_point = max(rf_max - t_duration, 0)
+                # start_remove.append(start_detected_point)
+                # stop_detected_point = min(rf_max + t_duration + 1, X_section.shape[0])
+                # stop_remove.append(stop_detected_point)
 
-                middle_diff[pat_file]["{}_{}".format(t_duration, attempt)] = (int(np.min(t_diff)))
+                # t_diff = np.abs(accepted_points - rf_max)
+                # print("Pat : {}_ t{} _ n{} - Time diff: {} ".format(pat_file, t_duration, attempt, np.min(t_diff)))
+                #
+                # middle_diff[pat_file]["{}_{}".format(t_duration, attempt)] = (int(np.min(t_diff)))
 
-    print(middle_diff)
+
     return middle_diff
 
 
 if __name__ == '__main__':
     # prepare_data("-1")
     # prepare_epilepsiae()
-    classify()
+    # classify()
     # classify_epilepsiae()
     # inference(-1)
     # prepare_pickle_files()
@@ -425,4 +435,12 @@ if __name__ == '__main__':
     # for pat in range(1,24):
     #     middle_diff.update(inference(pat))
     # print(middle_diff)
+    diffs = {'train': [], 'test': []}
+    for pat in range(1,24):
+        diffs['train'].append(inference(pat,'chb', 'chb'))
+    # diffs['test'] = inference(-1, 'chb', 'new_epilepsiae')
+
+    with open('../output/eglass_chb_loocv.pickle', 'wb') as outfile:
+        pickle.dump(diffs, outfile)
+    print(diffs)
 

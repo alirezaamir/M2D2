@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from utils.params import pat_list
 from utils.data import get_epilepsiae_test, build_dataset_pickle
 from utils.gru_visualization import get_within_between
+import pickle
 
 sys.path.append("../")
 LOG = logging.getLogger(os.path.basename(__file__))
@@ -71,7 +72,7 @@ def find_original_index(original_index_list, new_index, K_len):
     return original_index
 
 
-def get_changing_points(K_mat, steps):
+def get_changing_points(K_mat, steps, t_duration):
     removed_list = []
     changing_point_list = []
     initial_mmd = get_interval_mmd(K_mat)
@@ -84,8 +85,8 @@ def get_changing_points(K_mat, steps):
         original_index = find_original_index(removed_list, arg_max_mmd, original_len)
         changing_point_list.append(original_index)
 
-        start = np.max((0, arg_max_mmd - EXCLUDED_SIZE))
-        end = np.min((K_mat.shape[0], arg_max_mmd + EXCLUDED_SIZE))
+        start = np.max((0, arg_max_mmd - t_duration))
+        end = np.min((K_mat.shape[0], arg_max_mmd + t_duration+1))
 
         # remove rows and columns in K_mat from start to end
         changing_interval = np.arange(start, end, dtype=np.int)
@@ -122,17 +123,19 @@ def plot_mmd(mmd, argmax_mmd, y_true, name, dir):
     plt.close()
 
 
-def main():
+def main(mode):
     dirname = "../temp/vae_mmd"
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    source_arch = 'vae_unsup_chb'
+    # source_arch = 'vae_sup_chb'
+    source_arch = 'vae_epil'
+    # source_arch = 'epilepsiae'
     test_arch = 'Epilepsiae_un'
-    beta = 1e-05
-    latent_dim = 128
+    beta = 0.0001
+    latent_dim = 32
     lr = 0.0001
-    decay = 0.02
+    decay = 0.5
     gamma = 0.0
 
     root = "../output/vae/{}/".format(source_arch)
@@ -155,7 +158,7 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    subdirname = "{}/{}/{}".format(dirname, SEG_LENGTH, test_arch)
+    subdirname = "{}/{}/{}/{}".format(dirname, SEG_LENGTH, test_arch, mode)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
@@ -164,12 +167,10 @@ def main():
     z_dict = {}
     # for test_patient in range(1,25):
     J_list = {}
-    for pat_id in pat_list:#range(1,25):
-        # test_patient = pat_list[pat_id]
-        source_pat = -1
-        sessions = get_epilepsiae_test(test_patient=pat_id)
-        # sessions = (test_patient=test_patient)
 
+    target = pat_list if mode=='train' else range(1,25)
+    for pat_id in target:#range(1,25):
+        source_pat = pat_id
         # Load the specific weights for the model
         dirname = root + stub.format(SEG_LENGTH, beta, latent_dim, lr, decay, gamma, source_pat)
         if not os.path.exists(dirname):
@@ -177,6 +178,17 @@ def main():
             exit()
         model.load_weights(dirname)
         intermediate_model = tf.keras.models.Model(inputs=model.inputs, outputs=model.layers[1].output)
+
+        # test_patient = pat_list[pat_id]
+
+        # source_pat = pat_id
+        test_patient = pat_id
+        if mode == 'train':
+            sessions = get_epilepsiae_test(test_patient=pat_id)
+        else:
+            sessions = build_dataset_pickle(test_patient=test_patient)
+
+        pat_diff = []
 
         for node in sessions.keys():   # Loop2: nodes in the dataset
             # print("node: {}".format(node))
@@ -195,19 +207,14 @@ def main():
             LOG.info("Session {}\nmean:{}, std: {}".format(node, np.mean(X), np.std(X)))
 
             latent = intermediate_model.predict(X)[2]
-            z_dict[node] = latent
-            print("Z space {} : {}".format(node, latent.shape))
-            print("y true: {}".format(y_true.shape))
-            Sb, Sw, J = get_within_between(latent, y_true)
-            J_list[node] = J
-            continue
+            # z_dict[node] = latent
+            # print("Z space {} : {}".format(node, latent.shape))
+            # print("y true: {}".format(y_true.shape))
+            # Sb, Sw, J = get_within_between(latent, y_true)
+            # J_list[node] = J
+
 
             K = kernel(latent)
-            mmd_maximum, mmd = get_changing_points(K, 1)
-            LOG.info("mmd maximum : {}".format(mmd_maximum))
-            print("MMD shape: {}\ny shape:{}".format(mmd.shape, y_true.shape))
-            y_true = y_true[interval_len: -interval_len]
-            plot_mmd(mmd, mmd_maximum, y_true, node, subdirname)
 
             y_non_zero = np.where(y_true > 0, 1, 0)
             y_non_zero = np.concatenate((y_non_zero, [0]))
@@ -224,21 +231,38 @@ def main():
             middle_points = (start_points + stop_points) // 2
             LOG.info("start: {}, stop: {}\npoints: {}".format(start_points, stop_points, accepted_points))
 
-            t_diff = np.abs(accepted_points - mmd_maximum[0])
+            for t_duration in [0, 4, 8, 15, 37, 75]:
+                mmd_maximum, mmd = get_changing_points(K.copy(), 3, t_duration)
+                LOG.info("mmd maximum : {}".format(mmd_maximum))
+                print("MMD shape: {}\ny shape:{}".format(mmd.shape, y_true.shape))
+                # y_true = y_true[interval_len: -interval_len]
 
-            LOG.info("Time diff : {}".format(t_diff))
-            if len(t_diff) >0 :
-                middle_diff.append(np.min(t_diff))
 
-    # with open("../output/z_16.pickle", "wb") as pickle_file:
-    #     pickle.dump(z_dict, pickle_file)
+                top1 = np.min(np.abs(accepted_points - mmd_maximum[0]))
+                top2 = np.min(np.abs(accepted_points - mmd_maximum[1]))
+                top3 = np.min(np.abs(accepted_points - mmd_maximum[2]))
+                LOG.info("Time diff : {}, {}, {}".format(top1, top2, top3))
+                middle_diff.append((t_duration, top1, np.min([top1, top2, top3])))
 
-    print("J s: {}".format(J_list))
+    #         mmd_maximum, mmd = get_changing_points(K.copy(), 1, 0)
+    #         plot_mmd(mmd, mmd_maximum, y_true[interval_len: -interval_len], node, subdirname)
+    #         node_diff = []
+    #         for idx in range(mmd.shape[0]):
+    #             t_diff = np.abs(np.subtract(accepted_points, idx))
+    #             # LOG.info("Time diff : {}".format(np.min(t_diff)))
+    #             node_diff.append((mmd[idx], np.min(t_diff)))
+    #         pat_diff.append(node_diff)
+    #     middle_diff += pat_diff
+    #
+    # with open('../output/{}_epil_chb_{}.pickle'.format(source_arch, mode), 'wb') as outfile:
+    #     pickle.dump(middle_diff, outfile)
+
+    # print("J s: {}".format(J_list))
     print(middle_diff)
-    plt.figure()
-    plt.hist(middle_diff)
-    plt.savefig("{}/hist_diff.png".format(subdirname))
-    plt.show()
+    # plt.figure()
+    # plt.hist(middle_diff)
+    # plt.savefig("{}/hist_diff.png".format(subdirname))
+    # plt.show()
 
 
 class PrintLogs(tf.keras.callbacks.Callback):
@@ -254,4 +278,5 @@ class PrintLogs(tf.keras.callbacks.Callback):
 
 if __name__ == "__main__":
     tf.config.experimental.set_visible_devices([], 'GPU')
-    main()
+    main('train')
+    # main('test')

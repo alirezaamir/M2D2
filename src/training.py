@@ -42,8 +42,8 @@ def main():
     gamma = float(sys.argv[6])
     test_patient_id = int(sys.argv[7])
 
-    # test_patient = pat_list[test_patient_id] if test_patient_id != -1 else test_patient_id
-    test_patient = str(test_patient_id)
+    test_patient = pat_list[test_patient_id] if test_patient_id != -1 else test_patient_id
+    # test_patient = str(test_patient_id)
 
     param_str = """
     ==========================
@@ -85,7 +85,7 @@ def main():
 
 
 def train_model(model, dirname, lr_init, decay, beta, test_patient):
-    max_epochs = 3  # 200
+    max_epochs = 60  # 200
     patience = 20
     batch_size = 32
     beta_start_epoch = 10
@@ -97,31 +97,32 @@ def train_model(model, dirname, lr_init, decay, beta, test_patient):
     beta_annealing = AnnealingCallback(beta, beta_start_epoch, max_epochs)
 
     all_filenames = get_all_filenames(entire_dataset=True)
-    print(all_filenames["train"][test_patient])
+    # print(all_filenames["train"][test_patient])
+
     savedir = dirname + '/saved_model/'
     if not os.path.exists(savedir):
         os.makedirs(savedir)
 
-    get_dataset = build_dataset_chb
+    get_dataset = build_dataset_epilepsiae
     savedir = dirname + '/saved_model/'
     if not os.path.exists(savedir):
         os.makedirs(savedir)
 
-    for iter in range(6):
-        train_data, train_label = get_dataset("train", test_patient, all_filenames)
-        print("Shape :{}, {}".format(train_data.shape, train_label.shape))
-        valid_data, valid_label = get_dataset("valid", test_patient, all_filenames)
-        print("Shape :{}, {}".format(valid_data.shape, valid_label.shape))
-        model.fit(x=[train_data, train_label], validation_data=[valid_data, valid_label],
-                  initial_epoch=iter * max_epochs,
-                  epochs=(iter + 1) * max_epochs,
-                  batch_size=batch_size,
-                  shuffle=True,
-                  callbacks=[early_stopping, history, scheduler, beta_annealing]
-        )
-        model.save_weights(savedir, save_format='tf')
-        del train_data, valid_data
-        gc.collect()
+    # for iter in range(6):
+    train_data, train_label = get_dataset("train", test_patient, all_filenames)
+    print("Shape :{}, {}".format(train_data.shape, train_label.shape))
+    valid_data, valid_label = get_dataset("valid", test_patient, all_filenames)
+    print("Shape :{}, {}".format(valid_data.shape, valid_label.shape))
+    model.fit(x=[train_data, train_label], validation_data=[valid_data, valid_label],
+              initial_epoch=0,
+              epochs= max_epochs,
+              batch_size=batch_size,
+              shuffle=True,
+              callbacks=[early_stopping, history, scheduler, beta_annealing]
+    )
+    model.save_weights(savedir, save_format='tf')
+        # del train_data, valid_data
+        # gc.collect()
 
 
 def build_dataset_chb(mode, test_patient, all_filenames):
@@ -148,7 +149,8 @@ def build_dataset_chb(mode, test_patient, all_filenames):
 def build_dataset_epilepsiae(mode, test_patient, _):
     X_total = np.zeros(shape=(0, SEG_N, 2))
     y_total = np.zeros(shape=(0, ))
-    for label in ['non_seizure', 'seizure']:
+    # for label in ['non_seizure', 'seizure']:
+    for label in ['seizure']:
         dirname = "../temp/vae_mmd_data/{}/epilepsiae_{}/{}".format(SEG_N, label, mode)
         filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if not x.startswith("{}".format(test_patient))]
         print(filenames)

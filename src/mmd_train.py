@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 import os
 from utils import vae_model
@@ -31,21 +33,21 @@ LATENT_DIM = 16
 
 def train_model():
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_BFCN_v63".format(SEG_LENGTH, arch)
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/CHB_BFCN_v63".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
     middle_diff = []
-    # all_filenames = get_all_filenames(entire_dataset=False)
+    all_filenames = get_all_filenames(entire_dataset=False)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
     # pat_error_list = ['pat_7302', 'pat_22602', 'pat_30802',  'pat_59102', 'pat_111902']
-    for test_id in range(len(pat_list)):  # ["-1"]:  # range(30):  # range(1,24):
-        test_patient = pat_list[test_id]
-        # test_patient = str(test_id)
-        # train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
-        train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN, state_len=None)
-        # val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
-        val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN, state_len=None)
+    for test_id in range(1,24):#range(len(pat_list)):  # ["-1"]:  # range(30):  # range(1,24):
+        # test_patient = pat_list[test_id]
+        test_patient = str(test_id)
+        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+        # train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN, state_len=None)
+        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+        # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN, state_len=None)
         print("Shape :{}".format(train_data.shape))
         print("Shape :{}".format(train_label.shape))
 
@@ -91,10 +93,10 @@ def train_model():
             # train_label_balanced = train_label_balanced[idx]
 
             vae_mmd_model.fit(x=train_data_balanced, y=train_label_balanced, validation_data=[val_data, val_label],
-                              batch_size=32, epochs=8, verbose=1, shuffle=True)
+                              batch_size=32, initial_epoch=iter*8, epochs=8*(iter+1), verbose=1, shuffle=True)
 
-        diffs = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname, dataset='Epilepsiae', FCN_model=True)
-        middle_diff += diffs
+        # diffs = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname, dataset='Epilepsiae', FCN_model=True)
+        # middle_diff += diffs
         vae_mmd_model.save(savedir)
     # plt.figure()
     # plt.hist(middle_diff)
@@ -144,7 +146,7 @@ def inference(test_patient, trained_model, subdirname:str, dataset='CHB', FCN_mo
             # y_true = np.reshape(y_true, newshape=(-1, 1))
             mmd_edge_free = vae_mmd_model.predict(X_section)
             mmd_maximum = [np.argmax(mmd_edge_free)]
-            plot_mmd(mmd_edge_free[:, 0], mmd_maximum, y_true, node, subdirname)
+            # plot_mmd(mmd_edge_free[:, 0], mmd_maximum, y_true, node, subdirname)
         else:
             # Add non seizure signal as the initialization of the states
             X_section = np.expand_dims(X, 0)
@@ -159,58 +161,104 @@ def inference(test_patient, trained_model, subdirname:str, dataset='CHB', FCN_mo
             plot_mmd(mmd_edge_free[0, :, 0], mmd_maximum, y_true, node, subdirname)
 
         seizure_points = get_seizure_point_from_label(y_true)
+        # print(len(y_true) , mmd_edge_free.shape)
 
-        t_diff = np.abs(seizure_points - mmd_maximum[0])
-        LOG.info("Time diff : {}".format(np.min(t_diff)))
-        diffs.append(np.min(t_diff))
+        # if np.max(mmd_edge_free) < 0:
+        #     diffs.append(-1)
+        # else:
+        node_diff = []
+        for idx in range(mmd_edge_free.shape[0]):
+            t_diff = np.abs(np.subtract(seizure_points, idx))
+            # LOG.info("Time diff : {}".format(np.min(t_diff)))
+            node_diff.append((mmd_edge_free[idx, 0], np.min(t_diff)))
+        diffs.append(node_diff)
+        # t_diff = np.abs(seizure_points - mmd_maximum[0])
+        # LOG.info("Time diff : {}".format(np.min(t_diff)))
+        # diffs.append((np.max(mmd_edge_free), np.min(t_diff)))
+
+        # diffs.append(np.max(mmd_edge_free[0, :, 0]))
     return diffs
 
 
-def get_results():
+def get_results(source_model):
     """
     This method is only for evaluation a saved model
     """
     arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/Epilepsiae_BFCN_v63".format(SEG_LENGTH, arch)
-    diffs = []
-    for pat_id in pat_list:
+    # source_model = 'Epilepsiae_BVIB_v63'
+    # source_model = 'Epilepsiae_BFCN_v63'
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/{}".format(SEG_LENGTH, arch, source_model)
+    diffs = {'train': [], 'test': []}
+    for pat_id in range(1,24): # pat_list:
+        save_path = '../temp/vae_mmd/integrated/{}/{}/{}/model/test_{}/saved_model/'.format(SEG_LENGTH,
+                                                                                            arch,
+                                                                                            source_model,
+                                                                                            pat_id)
+        trained_model = tf.keras.models.load_model(save_path)
+        diffs_pat = []
+        for test_pat in range(1,24): # pat_list:
+            if test_pat == pat_id:
+                continue
+            diff_pat = inference(test_pat, trained_model, subdirname, dataset='CHB', FCN_model=True)
+            diffs_pat += diff_pat
+        diffs['train'].append(diffs_pat)
+
+    for pat_id in range(1,24): # pat_list:
         pat = pat_id
-        diff_pat= inference(pat, None, subdirname, dataset='Epilepsiae', FCN_model=True)
-        diffs += diff_pat
-    print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
-    diffs_minute = [x / 15.0 for x in diffs]
-    plt.figure()
-    plt.hist(diffs_minute, bins=150, range=(0, 200))
-    plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
+        diff_pat= inference(pat, None, subdirname, dataset='CHB', FCN_model=True)
+        diffs['test'].append(diff_pat)
+
+    with open('../output/{}_data_loocv.pickle'.format(source_model), 'wb') as outfile:
+        pickle.dump(diffs, outfile)
+    # print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
+    # diffs_minute = [x / 15.0 for x in diffs]
+    # plt.figure()
+    # plt.hist(diffs_minute, bins=150, range=(0, 200))
+    # plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
 
 
-def across_dataset():
+def across_dataset(source_model):
     source_arch = 'vae_free'
-    source_model = 'Epilepsiae_BVIB_v63'
+    # source_model = 'Epilepsiae_s32_epoch30_v110'
+    # source_model = 'Epilepsiae_BVIB_v63'
+    # source_model = 'FCN_v80'
     subdirname = "../temp/vae_mmd/integrated/{}/across/from_{}/{}".format(SEG_LENGTH, source_arch, source_model)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
-    diffs = []
+    diffs = {'train': [], 'test': []}
     nc = {}
     save_path = '../temp/vae_mmd/integrated/{}/{}/{}/model/test_{}/saved_model/'.format(SEG_LENGTH,
                                                                                         source_arch,
                                                                                         source_model,
-                                                                                        'pat_102')
+                                                                                        -1)
     trained_model = tf.keras.models.load_model(save_path)
-    for pat_id in range(1,24):
+    for pat_id in range(30): #range(1,24):
+        # pat = pat_id
+        pat = pat_list[pat_id]
+        diff_pat = inference(pat, trained_model, subdirname, dataset='Epilepsiae', FCN_model=True)
+        diffs['test'] += diff_pat
+
+    for pat_id in range(1, 24):
         pat = pat_id
         # pat = pat_list[pat_id]
-        diff_pat = inference(pat, trained_model, subdirname, dataset='CHB')
-        diffs += diff_pat
-    print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
-    diffs_minute = [x / 15.0 for x in diffs]
-    plt.figure()
-    plt.hist(diffs_minute, bins=150, range=(0, 200))
-    plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
+        diff_pat = inference(pat, trained_model, subdirname, dataset='CHB', FCN_model=True)
+        diffs['train'] += diff_pat
+
+    with open('../output/{}_mmd_data.pickle'.format(source_model), 'wb') as outfile:
+        pickle.dump(diffs, outfile)
+    # print(diffs['train'])
+    # print(diffs['test'])
+    # print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
+    # diffs_minute = [x / 15.0 for x in diffs]
+    # plt.figure()
+    # plt.hist(diffs_minute, bins=150, range=(0, 200))
+    # plt.savefig("{}/hist_diff_{}.png".format(subdirname, SEQ_LEN))
 
 
 if __name__ == "__main__":
     # tf.config.experimental.set_visible_devices([], 'GPU')
-    train_model()
+    # train_model()
     # get_results()
-    # across_dataset()
+    for models in ['CHB_BFCN_v63']:
+        get_results(models)
+        # across_dataset(models)
