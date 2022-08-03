@@ -11,6 +11,7 @@ from utils.params import pat_list
 from utils.data import get_epilepsiae_test, build_dataset_pickle
 from utils.gru_visualization import get_within_between
 import pickle
+import scipy.signal
 
 sys.path.append("../")
 LOG = logging.getLogger(os.path.basename(__file__))
@@ -23,10 +24,9 @@ LOG.setLevel(logging.INFO)
 SF = 256
 SEG_LENGTH = 1024
 EXCLUDED_SIZE = 15
-interval_len = 6
 
 
-def get_interval_mmd(K_mat):
+def get_interval_mmd(K_mat, interval_len):
     mmd = []
     N = 2 * interval_len
     input_length = K_mat.shape[0]
@@ -45,7 +45,7 @@ def get_interval_mmd(K_mat):
     return np.array(mmd)
 
 
-def get_simplified_mmd(K_mat):
+def get_simplified_mmd(K_mat,interval_len):
     mmd = []
     N = 2 * interval_len
     input_length = K_mat.shape[0]
@@ -72,14 +72,14 @@ def find_original_index(original_index_list, new_index, K_len):
     return original_index
 
 
-def get_changing_points(K_mat, steps, t_duration):
+def get_changing_points(K_mat, steps, t_duration, interval_len):
     removed_list = []
     changing_point_list = []
-    initial_mmd = get_interval_mmd(K_mat)
+    initial_mmd = get_interval_mmd(K_mat, interval_len)
     original_len = K_mat.shape[0]
     # initial_mmd_corr = get_mmd_corrected(initial_mmd)
     for step in range(steps):
-        mmd = get_interval_mmd(K_mat)
+        mmd = get_interval_mmd(K_mat, interval_len)
         # mmd_corr = get_mmd_corrected(mmd)
         arg_max_mmd = np.argmax(mmd)
         original_index = find_original_index(removed_list, arg_max_mmd, original_len)
@@ -128,12 +128,12 @@ def main(mode):
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    # source_arch = 'vae_sup_chb'
-    source_arch = 'vae_epil'
+    source_arch = 'vae_unsupervised'
+    # source_arch = 'vae_epil'
     # source_arch = 'epilepsiae'
     test_arch = 'Epilepsiae_un'
-    beta = 0.0001
-    latent_dim = 32
+    beta = 1e-05
+    latent_dim = 16
     lr = 0.0001
     decay = 0.5
     gamma = 0.0
@@ -167,8 +167,9 @@ def main(mode):
     z_dict = {}
     # for test_patient in range(1,25):
     J_list = {}
+    b, a = scipy.signal.butter(N=3, Wn=[0.01, 0.15], btype='band')
 
-    target = pat_list if mode=='train' else range(1,25)
+    target = pat_list if mode=='test' else range(1,24)
     for pat_id in target:#range(1,25):
         source_pat = pat_id
         # Load the specific weights for the model
@@ -183,7 +184,7 @@ def main(mode):
 
         # source_pat = pat_id
         test_patient = pat_id
-        if mode == 'train':
+        if mode == 'test':
             sessions = get_epilepsiae_test(test_patient=pat_id)
         else:
             sessions = build_dataset_pickle(test_patient=test_patient)
@@ -206,6 +207,7 @@ def main(mode):
 
             LOG.info("Session {}\nmean:{}, std: {}".format(node, np.mean(X), np.std(X)))
 
+            X = scipy.signal.filtfilt(b, a, X, axis=1)
             latent = intermediate_model.predict(X)[2]
             # z_dict[node] = latent
             # print("Z space {} : {}".format(node, latent.shape))
@@ -230,19 +232,19 @@ def main(mode):
                 accepted_points += range(start, stop)
             middle_points = (start_points + stop_points) // 2
             LOG.info("start: {}, stop: {}\npoints: {}".format(start_points, stop_points, accepted_points))
+            for interval_len in [6, 7, 8, 9, 10, 11, 12]:
+                for t_duration in [0, 4, 8, 15, 37, 75]:
+                    mmd_maximum, mmd = get_changing_points(K.copy(), 3, t_duration, interval_len)
+                    LOG.info("mmd maximum : {}".format(mmd_maximum))
+                    print("MMD shape: {}\ny shape:{}".format(mmd.shape, y_true.shape))
+                    # y_true = y_true[interval_len: -interval_len]
 
-            for t_duration in [0, 4, 8, 15, 37, 75]:
-                mmd_maximum, mmd = get_changing_points(K.copy(), 3, t_duration)
-                LOG.info("mmd maximum : {}".format(mmd_maximum))
-                print("MMD shape: {}\ny shape:{}".format(mmd.shape, y_true.shape))
-                # y_true = y_true[interval_len: -interval_len]
 
-
-                top1 = np.min(np.abs(accepted_points - mmd_maximum[0]))
-                top2 = np.min(np.abs(accepted_points - mmd_maximum[1]))
-                top3 = np.min(np.abs(accepted_points - mmd_maximum[2]))
-                LOG.info("Time diff : {}, {}, {}".format(top1, top2, top3))
-                middle_diff.append((t_duration, top1, np.min([top1, top2, top3])))
+                    top1 = np.min(np.abs(accepted_points - mmd_maximum[0]))
+                    top2 = np.min(np.abs(accepted_points - mmd_maximum[1]))
+                    top3 = np.min(np.abs(accepted_points - mmd_maximum[2]))
+                    LOG.info("Time diff : {}, {}, {}".format(top1, top2, top3))
+                    middle_diff.append((pat_id, interval_len, t_duration, top1, np.min([top1, top2, top3])))
 
     #         mmd_maximum, mmd = get_changing_points(K.copy(), 1, 0)
     #         plot_mmd(mmd, mmd_maximum, y_true[interval_len: -interval_len], node, subdirname)
@@ -254,11 +256,11 @@ def main(mode):
     #         pat_diff.append(node_diff)
     #     middle_diff += pat_diff
     #
-    # with open('../output/{}_epil_chb_{}.pickle'.format(source_arch, mode), 'wb') as outfile:
-    #     pickle.dump(middle_diff, outfile)
+    with open('../output/chb_loocv_mmd_len.pickle', 'wb') as outfile:
+        pickle.dump(middle_diff, outfile)
 
     # print("J s: {}".format(J_list))
-    print(middle_diff)
+    # print(middle_diff)
     # plt.figure()
     # plt.hist(middle_diff)
     # plt.savefig("{}/hist_diff.png".format(subdirname))
