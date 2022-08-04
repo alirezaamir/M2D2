@@ -74,6 +74,16 @@ def sampen2(dim, r, data):
     return saen
 
 
+def get_entropy_features(data, samplFreq):
+    spectral_entropy = antropy.spectral_entropy(data, sf=samplFreq, normalize=True)
+    spectral_entropy = 0 if np.isnan(spectral_entropy) else spectral_entropy
+    aprox_entropy = antropy.app_entropy(data)
+    aprox_entropy = 0 if np.isnan(aprox_entropy) else aprox_entropy
+    higuchi = antropy.higuchi_fd(data)
+    higuchi = 0 if np.isnan(higuchi) else higuchi
+    return [spectral_entropy, aprox_entropy, higuchi]
+
+
 def calculateMLfeatures(data, samplFreq):
     ''' function that calculates various features relevant for epileptic seizure detection
     from paper: D. Sopic, A. Aminifar, and D. Atienza, e-Glass: A Wearable System for Real-Time Detection of Epileptic Seizures, 2018
@@ -233,15 +243,48 @@ def prepare_pickle_files():
     pickle.dump(new_features_dict, open("../test_code/Features_Eglass_new_epilepsiae.pickle", "wb"))
 
 
+def add_entropy_features():
+    features_dict = pickle.load(open("../test_code/Features_Eglass_chb.pickle", "rb"))
+    print(features_dict)
+    all_filenames = get_all_filenames(entire_dataset=True)
+    mode = 'train'
+    new_features_dict = {}
+    for test_patient in ["-1"]:
+        for filename in all_filenames[mode][test_patient]:
+
+            file_pat = filename.split('/')[-1][:-7]
+            print(file_pat)
+
+            with open(filename, "rb") as pickle_file:
+                data = pickle.load(pickle_file)
+                x = np.array(data["X"])
+                y = np.array(data["y"])
+                if np.sum(y) == 0:
+                    continue
+
+                features = np.zeros((x.shape[0], 57*2))
+                for idx, sample in enumerate(range(x.shape[0])):
+                    features[sample, :54] = features_dict[file_pat]["X"][idx, :54]
+                    features[sample, 54:57] = get_entropy_features(x[sample, :, 0], samplFreq=256)
+                    features[sample, 57:57+54] = features_dict[file_pat]["X"][idx, 54:]
+                    features[sample, 57+54:] = get_entropy_features(x[sample, :, 1], samplFreq=256)
+                new_features_dict[file_pat] = {"X": features, "y": y}
+                print("pat {} new features: {}, {}, {}".format(file_pat, np.mean(features[:, 54]), np.mean(features[:, 55]), np.mean(features[:, 56])))
+            # new_features_dict[pat_name] = {"X": features_dict[pat_name], "y": y}
+            # print("Shape: {}".format(features_dict[pat_name]["X"].shape))
+
+    pickle.dump(new_features_dict, open("../test_code/Features_Eglass_entropy_chb.pickle", "wb"))
+
+
 def classify():
-    features_dict = pickle.load(open("../test_code/Features_Eglass_new_epilepsiae.pickle", "rb"))
+    features_dict = pickle.load(open("../test_code/Features_Eglass_entropy_chb.pickle", "rb"))
     middle_diff = []
-    for test_patient in pat_list: #range(1,24):
-        # train_files = [x for x in features_dict.keys() if not x.startswith("chb{:02d}".format(test_patient))]
-        train_files = [x for x in features_dict.keys() if not x.startswith("{}".format(test_patient))]
-        # test_files = [x for x in features_dict.keys() if x.startswith("chb{:02d}".format(test_patient))]
-        test_files = [x for x in features_dict.keys() if x.startswith("{}".format(test_patient))]
-        train_data = np.zeros((0,108))
+    for test_patient in range(1,24):#pat_list: #range(1,24):
+        train_files = [x for x in features_dict.keys() if not x.startswith("chb{:02d}".format(test_patient))]
+        # train_files = [x for x in features_dict.keys() if not x.startswith("{}".format(test_patient))]
+        test_files = [x for x in features_dict.keys() if x.startswith("chb{:02d}".format(test_patient))]
+        # test_files = [x for x in features_dict.keys() if x.startswith("{}".format(test_patient))]
+        train_data = np.zeros((0,114))
         train_label = np.zeros((0,))
         for pat_file in train_files:
             train_data = np.concatenate((train_data, features_dict[pat_file]['X']))
@@ -268,7 +311,7 @@ def classify():
             train_label_balanced = train_label_balanced[idx]
 
             rf.fit(train_data_balanced, train_label_balanced)
-        pickle.dump(rf, open("../test_code/models/model_{}.pickle".format(test_patient), "wb"))
+        pickle.dump(rf, open("../test_code/entropy_models/model_{}.pickle".format(test_patient), "wb"))
 
         for pat_file in test_files:
             test_data = features_dict[pat_file]['X']
@@ -297,10 +340,10 @@ def classify():
 
 
 def classify_epilepsiae():
-    features_dict = pickle.load(open("../test_code/Features_Eglass_new_epilepsiae.pickle", "rb"))
+    features_dict = pickle.load(open("../test_code/Features_Eglass_entropy_chb.pickle", "rb"))
     middle_diff = []
     train_files = features_dict.keys()
-    train_data = np.zeros((0, 108))
+    train_data = np.zeros((0, 114))
     train_label = np.zeros((0,))
     for pat_file in train_files:
         train_data = np.concatenate((train_data, features_dict[pat_file]['X']))
@@ -326,8 +369,8 @@ def classify_epilepsiae():
 
         rf.fit(train_data_balanced, train_label_balanced)
 
-    pickle.dump(rf, open("../test_code/models/model_{}.pickle".format(-1), "wb"))
-    features_dict = pickle.load(open("../test_code/Features_Eglass_chb.pickle", "rb"))
+    pickle.dump(rf, open("../test_code/models/model_chb_{}.pickle".format(-1), "wb"))
+    features_dict = pickle.load(open("../test_code/Features_Eglass_entropy_epilepsiae.pickle", "rb"))
 
     test_files = features_dict.keys()
     for pat_file in test_files:
@@ -428,19 +471,20 @@ if __name__ == '__main__':
     # prepare_data("-1")
     # prepare_epilepsiae()
     # classify()
-    # classify_epilepsiae()
+    classify_epilepsiae()
     # inference(-1)
     # prepare_pickle_files()
     # middle_diff = {}
     # for pat in range(1,24):
     #     middle_diff.update(inference(pat))
     # print(middle_diff)
-    diffs = {'train': [], 'test': []}
-    for pat in range(1,24):
-        diffs['train'].append(inference(pat,'chb', 'chb'))
-    # diffs['test'] = inference(-1, 'chb', 'new_epilepsiae')
-
-    with open('../output/eglass_chb_loocv.pickle', 'wb') as outfile:
-        pickle.dump(diffs, outfile)
-    print(diffs)
+    # diffs = {'train': [], 'test': []}
+    # for pat in range(1,24):
+    #     diffs['train'].append(inference(pat,'chb', 'chb'))
+    # # diffs['test'] = inference(-1, 'chb', 'new_epilepsiae')
+    #
+    # with open('../output/eglass_chb_loocv.pickle', 'wb') as outfile:
+    #     pickle.dump(diffs, outfile)
+    # print(diffs)
+    # add_entropy_features()
 
