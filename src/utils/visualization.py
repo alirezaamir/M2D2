@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import tensorflow as tf
-import utils.vae_model as vae_model
+from utils import m2d2_models
 import pickle
 
 SF = 256
@@ -60,7 +60,7 @@ def get_model(test_patient):
 
     root = "../../output/vae/{}/".format(arch)
     stub = "seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}/saved_model/"
-    build_model = vae_model.build_VAE_model
+    build_model = m2d2_models.build_VAE_model
     build_model_args = {
         "input_shape": (SEG_LENGTH, 2,),
         "enc_dimension": latent_dim,

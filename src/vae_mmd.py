@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 import numpy as np
-from utils import vae_model
+from utils import m2d2_models
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
 from sklearn.metrics.pairwise import polynomial_kernel
@@ -140,7 +140,7 @@ def main(mode):
 
     root = "../output/vae/{}/".format(source_arch)
     stub = "seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}/saved_model/"
-    build_model = vae_model.build_VAE_model
+    build_model = m2d2_models.build_VAE_model
     build_model_args = {
         "input_shape": (SEG_LENGTH, 2,),
         "enc_dimension": latent_dim,

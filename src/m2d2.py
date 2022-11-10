@@ -2,7 +2,7 @@ import json
 
 import numpy as np
 import os
-from utils import vae_model
+from utils import m2d2_models
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping, CSVLogger
@@ -58,7 +58,7 @@ def train_model():
 
 
         # load the model
-        vae_mmd_model = vae_model.get_FCN_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
+        vae_mmd_model = m2d2_models.get_FCN_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
 
         print(vae_mmd_model.summary())

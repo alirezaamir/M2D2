@@ -1,6 +1,5 @@
 import numpy as np
 import os
-from utils import vae_model
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping, CSVLogger

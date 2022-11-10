@@ -14,7 +14,7 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 
 from utils.params import SEG_N
-from utils import vae_model
+from utils import m2d2_models
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import Callback
 from tensorflow.keras.callbacks import Callback, EarlyStopping, CSVLogger, LearningRateScheduler
@@ -55,7 +55,7 @@ def main():
     ==========================""".format(arch, beta, decay, latent_dim, lr)
     LOG.info("Training Model with parameters:{}".format(param_str))
 
-    build_model = vae_model.build_VAE_model
+    build_model = m2d2_models.build_VAE_model
     root = "../output/vae/{}".format(arch)
     stub = "/seg_n_{}/beta_{}/latent_dim_{}/lr_{}/decay_{}/gamma_{}/test_{}"
     dirname = root + stub.format(SEG_N, beta, latent_dim, lr, decay, gamma, test_patient)
