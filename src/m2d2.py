@@ -32,68 +32,65 @@ LATENT_DIM = 16
 
 
 def train_model():
-    arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/CHB_BFCN_v63".format(SEG_LENGTH, arch)
+    arch = 'M2D2'
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/CHB_CHB".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
     middle_diff = []
-    all_filenames = get_all_filenames(entire_dataset=False)
+    all_filenames = get_all_filenames(entire_dataset=True)
     input_dir = "../temp/vae_mmd_data/1024/epilepsiae_seizure"
-    # pat_error_list = ['pat_7302', 'pat_22602', 'pat_30802',  'pat_59102', 'pat_111902']
-    for test_id in range(1,24):#range(len(pat_list)):  # ["-1"]:  # range(30):  # range(1,24):
-        # test_patient = pat_list[test_id]
-        test_patient = str(test_id)
-        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
-        # train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN, state_len=None)
-        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
-        # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN, state_len=None)
-        print("Shape :{}".format(train_data.shape))
-        print("Shape :{}".format(train_label.shape))
+    test_patient = '-1'
+    train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+    # train_data, train_label = get_epilepsiae_seizures("train", test_patient, input_dir, max_len=SEQ_LEN, state_len=None)
+    val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=None)
+    # val_data, val_label = get_epilepsiae_seizures("valid", test_patient, input_dir, max_len=SEQ_LEN, state_len=None)
+    print("Shape :{}".format(train_data.shape))
+    print("Shape :{}".format(val_data.shape))
 
-        train_data = np.reshape(train_data, newshape=(-1, 1024, 2))
-        train_label = np.reshape(train_label, newshape=(-1, 1))
-        val_data = np.reshape(val_data, newshape=(-1, 1024, 2))
-        val_label = np.reshape(val_label, newshape=(-1, 1))
+    train_data = np.reshape(train_data, newshape=(-1, 1024, 2))
+    train_label = np.reshape(train_label, newshape=(-1, 1))
+    val_data = np.reshape(val_data, newshape=(-1, 1024, 2))
+    val_label = np.reshape(val_label, newshape=(-1, 1))
 
 
-        # load the model
-        vae_mmd_model = m2d2_models.get_FCN_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
-                                                seq_len=None, trainable_vae=True)
+    # load the model
+    vae_mmd_model = m2d2_models.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
+                                              seq_len=None, trainable_vae=True)
 
-        print(vae_mmd_model.summary())
+    print(vae_mmd_model.summary())
 
-        # load the weights in the convolution layer
-        # conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
-        # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
+    # load the weights in the convolution layer
+    # conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
+    # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
-        history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
+    history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
-        vae_mmd_model.compile(optimizer=tf.keras.optimizers.SGD(), loss='binary_crossentropy')
+    vae_mmd_model.compile(optimizer=tf.keras.optimizers.SGD(), loss='binary_crossentropy')
 
-        BCE = tf.keras.losses.BinaryCrossentropy()
-        bce_train = []
-        bce_val = []
+    BCE = tf.keras.losses.BinaryCrossentropy()
+    bce_train = []
+    bce_val = []
 
-        savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
-        if not os.path.exists(savedir):
-            os.makedirs(savedir)
-        for iter in range(6):
-            non_seizure_index = np.where(train_label == 0)[0]
-            seizure_index = np.where(train_label != 0)[0]
-            seizure_count = seizure_index.shape[0]
+    savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
+    for iter in range(6):
+        non_seizure_index = np.where(train_label == 0)[0]
+        seizure_index = np.where(train_label != 0)[0]
+        seizure_count = seizure_index.shape[0]
 
-            non_seizure_index = np.random.permutation(non_seizure_index)
-            non_seizure_index_balanced = non_seizure_index[:6*seizure_count]
-            train_data_balanced = np.concatenate((train_data[seizure_index], train_data[non_seizure_index_balanced]))
-            train_label_balanced = np.concatenate((np.ones(seizure_count), np.zeros(6*seizure_count)))
+        non_seizure_index = np.random.permutation(non_seizure_index)
+        non_seizure_index_balanced = non_seizure_index[:6*seizure_count]
+        train_data_balanced = np.concatenate((train_data[seizure_index], train_data[non_seizure_index_balanced]))
+        train_label_balanced = np.concatenate((np.ones(seizure_count), np.zeros(6*seizure_count)))
 
-            # idx = np.random.permutation(max(6 * seizure_count, non_seizure_index))
-            # train_data_balanced = train_data_balanced[idx]
-            # train_label_balanced = train_label_balanced[idx]
+        # idx = np.random.permutation(max(6 * seizure_count, non_seizure_index))
+        # train_data_balanced = train_data_balanced[idx]
+        # train_label_balanced = train_label_balanced[idx]
 
-            vae_mmd_model.fit(x=train_data_balanced, y=train_label_balanced, validation_data=[val_data, val_label],
-                              batch_size=32, initial_epoch=iter*8, epochs=8*(iter+1), verbose=1, shuffle=True)
+        vae_mmd_model.fit(x=train_data_balanced, y=train_label_balanced,
+                          batch_size=32, initial_epoch=iter*8, epochs=8*(iter+1), verbose=1, shuffle=True)
 
         # diffs = inference(test_patient, trained_model=vae_mmd_model, subdirname=subdirname, dataset='Epilepsiae', FCN_model=True)
         # middle_diff += diffs
@@ -256,9 +253,9 @@ def across_dataset(source_model):
 
 
 if __name__ == "__main__":
-    # tf.config.experimental.set_visible_devices([], 'GPU')
-    # train_model()
+    tf.config.experimental.set_visible_devices([], 'GPU')
+    train_model()
     # get_results()
-    for models in ['CHB_BFCN_v63']:
-        get_results(models)
+    # for models in ['CHB_BFCN_v63']:
+    #     get_results(models)
         # across_dataset(models)
