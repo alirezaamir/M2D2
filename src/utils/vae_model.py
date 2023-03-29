@@ -7,6 +7,8 @@ from utils.losses import log_normal_pdf
 from tensorflow.keras import models, layers, losses
 from tensorflow.keras.utils import plot_model
 
+n_ff = [2, 4, 8]
+
 
 def build_VAE_model(input_shape=None,
                     enc_dimension=None,
@@ -74,17 +76,17 @@ def build_VAE_model(input_shape=None,
 def get_mmd_model(state_len=None,
                   latent_dim=None,
                   signal_len=None,
-                  seq_len = None,
+                  seq_len=None,
                   trainable_vae=True):
     input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 2))
     x = input_signal
     num_conv_layers = 3
     for i in range(num_conv_layers):
         x = layers.TimeDistributed(layers.Conv1D(8, 3, padding="same", activation="relu", trainable=trainable_vae),
-                                   name="conv1d_{}_1".format(i+1))(x)
+                                   name="conv1d_{}_1".format(i + 1))(x)
         x = layers.TimeDistributed(layers.Conv1D(8, 3, padding="same", activation="relu", trainable=trainable_vae),
-                                   name="conv1d_{}_2".format(i+1))(x)
-        x = layers.TimeDistributed(layers.MaxPooling1D(2), name="pool_{}".format(i+1))(x)
+                                   name="conv1d_{}_2".format(i + 1))(x)
+        x = layers.TimeDistributed(layers.MaxPooling1D(2), name="pool_{}".format(i + 1))(x)
 
     x = layers.TimeDistributed(layers.Flatten(), name='flatten')(x)
     mu = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="mu", trainable=trainable_vae),
@@ -101,15 +103,80 @@ def get_mmd_model(state_len=None,
     final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense1)
 
     model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
-    model.add_loss(tf.reduce_mean(tf.abs(z)-1) * 1e-2)
+    model.add_loss(tf.reduce_mean(tf.abs(z) - 1) * 1e-2)
+    return model
+
+
+def get_mmd_itnet_model(state_len=None,
+                        latent_dim=None,
+                        signal_len=None,
+                        seq_len=None,
+                        trainable_vae=True):
+    input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 2))
+
+    # block1 = layers.TimeDistributed(layers.Conv1D(n_ff[0], 16, use_bias=False, activation='linear', padding='same',
+    #                 name='Spectral_filter_1'))(input_signal)
+    # block1 = layers.TimeDistributed(layers.BatchNormalization())(block1)
+    # block1 = layers.TimeDistributed(layers.DepthwiseConv2D((2, 1), use_bias=False, padding='valid', depth_multiplier=1, activation='linear',
+    #                          depthwise_constraint=tf.keras.constraints.MaxNorm(max_value=1),
+    #                          name='Spatial_filter_1'))(block1)
+    block1 = layers.TimeDistributed(layers.Conv2D(8, (128, 1), use_bias=False, padding='same',
+                                                  activation='linear',
+                                                  name='Spectral_filter_1'), name='Conv2D_spectral')(
+        tf.expand_dims(input_signal, -1))
+    block1 = layers.TimeDistributed(layers.DepthwiseConv2D((2, 1), use_bias=False, padding='valid', depth_multiplier=2,
+                                                           depthwise_constraint=tf.keras.constraints.MaxNorm(
+                                                               max_value=1)), name='Spatial_filter')(block1)
+    block1 = layers.TimeDistributed(layers.BatchNormalization())(block1)
+    block1 = layers.TimeDistributed(layers.Activation('elu'))(block1)
+
+    # ================================
+
+    block1 = layers.TimeDistributed(layers.AveragePooling2D((4, 1)))(block1)
+    block1 = layers.TimeDistributed(layers.Dropout(0.25))(block1)
+
+    block2 = layers.TimeDistributed(layers.SeparableConv2D(16, (16, 1), use_bias=False, padding='same',
+                                                           activation='linear',
+                                                           name='Spatial_filter_2'))(block1)
+    block2 = layers.TimeDistributed(layers.BatchNormalization())(block2)
+    block2 = layers.TimeDistributed(layers.Activation('elu'))(block2)
+
+    block2 = layers.TimeDistributed(layers.AveragePooling2D((8,1)))(block2)
+    block2 = layers.TimeDistributed(layers.Dropout(0.25))(block2)
+
+    x = block2
+    # num_conv_layers = 3
+    # for i in range(num_conv_layers):
+    #     x = layers.TimeDistributed(layers.Conv1D(8, 3, padding="same", activation="relu", trainable=trainable_vae),
+    #                                name="conv1d_{}_1".format(i + 1))(x)
+    #     x = layers.TimeDistributed(layers.Conv1D(8, 3, padding="same", activation="relu", trainable=trainable_vae),
+    #                                name="conv1d_{}_2".format(i + 1))(x)
+    #     x = layers.TimeDistributed(layers.MaxPooling1D(2), name="pool_{}".format(i + 1))(x)
+
+    x = layers.TimeDistributed(layers.Flatten(), name='flatten')(x)
+    # mu = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="mu", trainable=trainable_vae),
+    #                             name='mu')(x)
+    # sigma = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="sigma", trainable=trainable_vae),
+    #                                name='sigma')(x)
+    # z = layers.Lambda(
+    #     new_sampling, output_shape=(latent_dim,), name="latents")([mu, sigma, latent_dim])
+    # mmd = tf.keras.layers.Bidirectional(MMDLayer(state_len, latent_dim, mask_th=16, go_backwards=False), name='MMD')(z)
+    # interval = tf.keras.layers.Conv1D(filters=9, kernel_size=17, padding='same', use_bias=False, name='conv_interval',
+    #                                   trainable=False)(mmd)
+    gru = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(units=25, return_sequences=True), name='GRU')(x)
+    dense1 = tf.keras.layers.Dense(100, activation='relu', name='dense1')(gru)
+    final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense1)
+
+    model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
+    # model.add_loss(tf.reduce_mean(tf.abs(z) - 1) * 1e-2)
     return model
 
 
 def get_conventional_model(state_len=None,
-                  latent_dim=None,
-                  signal_len=None,
-                  seq_len = None,
-                  trainable_vae=True):
+                           latent_dim=None,
+                           signal_len=None,
+                           seq_len=None,
+                           trainable_vae=True):
     input_signal = tf.keras.layers.Input(shape=(seq_len, signal_len, 2))
     x = input_signal
     num_conv_layers = 3
@@ -126,12 +193,12 @@ def get_conventional_model(state_len=None,
                                 name='mu')(x)
     sigma = layers.TimeDistributed(layers.Dense(latent_dim, activation="linear", name="sigma", trainable=trainable_vae,
                                                 kernel_initializer='zeros'),
-                                    name='sigma')(x)
+                                   name='sigma')(x)
     z = layers.Lambda(
         MMD_free_sampling, output_shape=(latent_dim,), name="latents")([mu, sigma, latent_dim])
 
-    dense1 = tf.keras.layers.Dense(4*latent_dim, activation='relu', name='dense1')(z)
-    dense2 = tf.keras.layers.Dense(2*latent_dim, activation='relu', name='dense2')(dense1)
+    dense1 = tf.keras.layers.Dense(4 * latent_dim, activation='relu', name='dense1')(z)
+    dense2 = tf.keras.layers.Dense(2 * latent_dim, activation='relu', name='dense2')(dense1)
     final_dense = tf.keras.layers.Dense(1, activation='sigmoid', name='final_dense')(dense2)
 
     model = tf.keras.models.Model(inputs=input_signal, outputs=final_dense)
@@ -165,4 +232,3 @@ def MMD_free_sampling(args):
     epsilon = K.random_normal(shape=(batch, dim))
     z = z_mean + K.exp(0.5 * z_log_var) * epsilon
     return z
-

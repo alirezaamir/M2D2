@@ -1,5 +1,8 @@
 import numpy as np
 import os
+
+import scipy.signal
+
 from utils import vae_model
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
@@ -15,6 +18,7 @@ from training import get_all_filenames
 from vae_mmd import plot_mmd
 from utils.params import pat_list
 import datetime
+from scipy import fft, signal
 
 LOG = logging.getLogger(os.path.basename(__file__))
 ch = logging.StreamHandler()
@@ -30,34 +34,34 @@ LATENT_DIM = 32
 
 
 def train_model():
-    arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(SEG_LENGTH, arch)
+    arch = 'M2D2'
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/GRU_only".format(SEG_LENGTH, arch)
     if not os.path.exists(subdirname):
         os.makedirs(subdirname)
 
     middle_diff = []
-    all_filenames = get_all_filenames(entire_dataset=False)
-    for test_id in range(1,24):
-        test_patient = str(test_id)
-        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
-        val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
-
-        # load the model
-        vae_mmd_model = vae_model.get_mmd_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
+    all_filenames = get_all_filenames(entire_dataset=True)
+    for test_id in ["-1"]:
+        vae_mmd_model = vae_model.get_mmd_itnet_model(state_len=STATE_LEN, latent_dim=LATENT_DIM, signal_len=SEG_LENGTH,
                                                 seq_len=None, trainable_vae=True)
 
         print(vae_mmd_model.summary())
 
+        test_patient = str(test_id)
+        train_data, train_label = dataset_training("train", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
+        # val_data, val_label = dataset_training("valid", test_patient, all_filenames, max_len=SEQ_LEN, state_len=40)
+
+        # load the model
+
         # load the weights in the convolution layer
         conv_weight = get_new_conv_w(state_len=STATE_LEN, N=8, state_dim=18)
-        vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
+        # vae_mmd_model.get_layer('conv_interval').set_weights(conv_weight)
 
         history = CSVLogger("{}/{}_training.log".format(subdirname, test_patient))
 
         vae_mmd_model.compile(optimizer=tf.keras.optimizers.RMSprop(), loss='binary_crossentropy')
 
-        vae_mmd_model.fit(x=train_data, y=train_label,
-                          validation_data=(val_data, val_label), batch_size=1, epochs=50,
+        vae_mmd_model.fit(x=train_data, y=train_label, batch_size=1, epochs=40,
                           callbacks=[history])
 
         savedir = '{}/model/test_{}/saved_model/'.format(subdirname, test_patient)
@@ -85,7 +89,7 @@ def inference(test_patient:int, trained_model, subdirname:str, dataset='CHB'):
 
     # Load the test dataset
     if dataset == 'CHB':
-        sessions = test_dataset(test_patient)
+        sessions = test_dataset(test_patient, train_valid=False)
         non_seizure_dataset = get_non_seizure_signal
     else:
         sessions = get_epilepsiae_test(test_patient)
@@ -125,6 +129,9 @@ def inference(test_patient:int, trained_model, subdirname:str, dataset='CHB'):
         plot_mmd(mmd_edge_free[0, :, 0], mmd_maximum, y_true, name, subdirname)
 
         seizure_points = get_seizure_point_from_label(y_true)
+        print(np.where(y_true == 1)[0])
+        print(np.where(seizure_points == 1)[0])
+        print(mmd_maximum)
 
         t_diff = np.abs(seizure_points - mmd_maximum[0])
         LOG.info("Time diff : {}".format(np.min(t_diff)))
@@ -132,16 +139,48 @@ def inference(test_patient:int, trained_model, subdirname:str, dataset='CHB'):
     return diffs
 
 
+def visualize(trained_model):
+    def FFT (t, y):
+        n= len(t)
+        delta = (max(t)  - min(t)) / (n-1)
+        k = int(n/2)
+        f = np.arange(k) / (n*delta)
+        Y = np.abs(fft.fft(y))[:k]
+        return (f, Y)
+
+    # weights_freq = np.squeeze(trained_model.get_layer(name='Spatial_filter_1').get_weights())
+    print(trained_model.summary())
+    for i in range(8):
+        weights = trained_model.get_layer(name='Conv2D_spectral').get_weights()[0][:, 0, 0, i]
+
+        weights = weights - np.mean(weights)
+        t = np.linspace(0, weights.size/256, num=weights.size)
+        F, Y = FFT(t, weights)
+        # Y = scipy.signal.savgol_filter(Y, len(Y)-1, 6)
+        plt.figure()
+        plt.plot(F, Y)
+        plt.savefig("vis_filter__{}.png".format(i))
+        plt.close()
+
+
+
 def get_results():
     """
     This method is only for evaluation a saved model
     """
-    arch = 'vae_free'
-    subdirname = "../temp/vae_mmd/integrated/{}/{}/z_minus1_v52".format(SEG_LENGTH, arch)
+    arch = 'M2D2'
+    # source_model = "chb_chb"
+    source_model = "GRU_only" # "EEG_Net"
+    subdirname = "../temp/vae_mmd/integrated/{}/{}/{}".format(SEG_LENGTH, arch, source_model)
     diffs = []
+    save_path = '../temp/vae_mmd/integrated/{}/{}/{}/model/test_{}/saved_model/'.format(SEG_LENGTH,
+                                                                                        arch,
+                                                                                        source_model, -1)
+    trained_model = tf.keras.models.load_model(save_path)
+    visualize(trained_model)
     for pat_id in range(1, 24):
         pat = pat_id
-        diff_pat = inference(pat, None, subdirname, dataset='CHB')
+        diff_pat = inference(pat, trained_model, subdirname, dataset='CHB')
         diffs += diff_pat
     print("Differences: {}\nMedian: {}\nMean: {}".format(diffs, np.median(diffs), np.mean(diffs)))
     diffs_minute = [x / 15.0 for x in diffs]
@@ -151,6 +190,6 @@ def get_results():
 
 
 if __name__ == "__main__":
-    tf.config.experimental.set_visible_devices([], 'GPU')
-    train_model()
-    # get_results()
+    # tf.config.experimental.set_visible_devices([], 'GPU')
+    # train_model()
+    get_results()

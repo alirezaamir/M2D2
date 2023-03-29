@@ -216,12 +216,13 @@ def get_seizure_point_from_label(y_true):
     accepted_points = []
     for start, stop in zip(start_points, stop_points):
         accepted_points += range(start, stop)
-    return y_true
+    return accepted_points
 
 
-def build_dataset_pickle(test_patient, root='..'):
+def build_dataset_pickle(test_patient, root='..', train_valid=True):
     dataset = {}
-    for mode in ["train" , "valid"]:
+    mode_list = ["train", "valid"] if train_valid else ["valid"]
+    for mode in mode_list:
         dirname = "{}/temp/vae_mmd_data/{}/full_normal/{}".format(root, SEG_N, mode)
         filenames = ["{}/{}".format(dirname, x) for x in os.listdir(dirname) if x.startswith("chb{:02d}".format(test_patient))]
         for filename in filenames:
